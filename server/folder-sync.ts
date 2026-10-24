@@ -13,6 +13,8 @@ import { planFolder, renderFolder } from "./tabs-file.ts";
 export interface FileIO {
   read(path: string): string | null;
   write(path: string, text: string): void;
+  /** Tells git to ignore a new TABS.md. Defaults to ensureExcluded. */
+  exclude?(dir: string): void;
 }
 
 const fileIO: FileIO = {
@@ -88,7 +90,7 @@ export function syncFolder(
     const latest = io.read(path);
     if (latest === current) {
       io.write(path, next);
-      if (creating) ensureExcluded(cwd);
+      if (creating) (io.exclude ?? ensureExcluded)(cwd);
       return creating ? "created" : "updated";
     }
     current = latest;

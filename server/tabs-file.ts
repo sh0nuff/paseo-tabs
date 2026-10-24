@@ -56,6 +56,11 @@ function oneLine(value: string): string {
   return value.split(/\s+/).filter(Boolean).join(" ");
 }
 
+/** A tab's name as its heading shows it. */
+export function tabTitle(agent: AgentRecord): string {
+  return oneLine(agent.title ?? "untitled");
+}
+
 function isOpenItem(line: string): boolean {
   return line.startsWith("- ") && !DONE_ITEM.test(line) && !line.startsWith("- Nothing");
 }
@@ -184,8 +189,7 @@ export function renderFolder(plan: FolderPlan): string {
   for (const group of plan.groups) {
     if (grouped) parts.push(`# ${group.title} · ${group.short}${group.archived ? " · archived" : ""}\n`);
     for (const tab of group.tabs) {
-      const title = oneLine(tab.agent.title ?? "untitled");
-      const heading = `## ${tab.number}. ${title} · ${tab.short}${tab.closed ? " · closed" : ""}`;
+      const heading = `## ${tab.number}. ${tabTitle(tab.agent)} · ${tab.short}${tab.closed ? " · closed" : ""}`;
       parts.push(`${trimEnd(`${heading}\n${tab.body}`)}\n`);
     }
   }
