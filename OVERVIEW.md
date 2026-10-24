@@ -1,14 +1,18 @@
 Tabs keeps a live checklist of every tab in a workspace, in a `TABS.md` file at the top of the repository, and adds a Tabs panel that jumps to any tab in one tap.
 
-Each tab gets its own section, headed by its number in the tab bar, its name and a short ID. Agents write what they are waiting on, their next steps and what they have done under their own heading, so you can see where every tab stands without scrolling back through each chat. Open `TABS.md` beside a chat to watch it update.
+Each tab gets its own section, headed by a coloured dot, its number in the tab bar, its name and a short ID. The dot is orange when something waits on you, blue when only the agent's next steps are open, and a tick when nothing is open. Agents write what they are waiting on, their next steps and what they have done under their own heading, so you can see where every tab stands without scrolling back through each chat. Open `TABS.md` beside a chat to watch it update.
 
 The plugin keeps the headings in step with your tabs. It numbers them in the order they were opened, follows renames, and moves closed tabs to the bottom. A closed tab's section stays while anything in it is still open, and goes 24 hours after the tab closed once nothing is. When two workspaces share one folder, each gets its own group with its own numbers.
 
-The Tabs panel lists the workspace's tabs with how many items each has open. Tapping a tab opens it, on desktop and on mobile.
+The Tabs panel lists the workspace's tabs with their dots, their one-line summaries and how many items are open, with tabs waiting on you in bold. Tapping a tab opens it, on desktop and on mobile.
 
 ## Setup
 
 Agents only write their sections if they know the rule. The repository is also a Claude Code plugin that gives every Claude tab the rule when it starts. Agents from other providers still get a numbered heading.
+
+## Settings
+
+Under Settings, Plugins, Tabs you can turn the dots off, turn off shortening of long names (usually Paseo's copy of a first message), and set how long a shortened name may be. The names in Paseo are never changed by the plugin.
 
 ## What it reads and writes
 

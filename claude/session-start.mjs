@@ -37,6 +37,7 @@ try {
       const here = dirname(fileURLToPath(import.meta.url));
       const rule = readFileSync(join(here, "rule.md"), "utf8")
         .replaceAll("{{SHORT_ID}}", agentId.slice(0, 7))
+        .replaceAll("{{AGENT_ID}}", agentId)
         .replaceAll("{{TABS_PATH}}", join(cwd, "TABS.md"));
       process.stdout.write(
         JSON.stringify({ hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: rule } }),

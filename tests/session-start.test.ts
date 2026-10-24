@@ -50,7 +50,7 @@ test("prints the rule with the short id and TABS.md path in a git repo", (t) => 
   const rule = context(stdout);
   assert.match(rule, /· abcdef1`/);
   assert.ok(rule.includes(`${repo}/TABS.md`));
-  assert.doesNotMatch(rule, /\{\{|abcdef12/);
+  assert.doesNotMatch(rule, /\{\{/);
 });
 
 test("falls back to the hook input's cwd", (t) => {
@@ -69,4 +69,13 @@ test("exits 0 even when rule.md is missing", (t) => {
   copyFileSync(HOOK, lonely);
 
   assert.deepEqual(run({ PASEO_AGENT_ID: "abcdef1234", PASEO_AGENT_CWD: repo }, "", lonely), { stdout: "", status: 0 });
+});
+
+test("gives the tab its full agent ID for renaming itself", (t) => {
+  const repo = gitInit(join(tempDir(t), "repo"));
+
+  const rule = context(run({ PASEO_AGENT_ID: "abcdef1234-5678", PASEO_AGENT_CWD: repo }).stdout);
+
+  assert.match(rule, /update_agent/);
+  assert.match(rule, /`abcdef1234-5678`/);
 });

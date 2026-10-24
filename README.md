@@ -2,10 +2,10 @@
 
 A live checklist of every [Paseo](https://paseo.sh) tab, in a `TABS.md` file at the top of your repository, with a Tabs panel that jumps to any tab.
 
-Each tab gets a section headed by its number in the tab bar, its name and a short ID. The agent in that tab keeps the section current: what it is waiting on you for, its next steps, and what it has done. Items are lettered, so you can say "2b" for tab 2, item b. Keep `TABS.md` open beside a chat and you can see where every tab stands without scrolling back through each one.
+Each tab gets a section headed by a dot showing where it stands, its number in the tab bar, its name and a short ID. The agent in that tab keeps the section current: what it is waiting on you for, its next steps, and what it has done. Items are lettered, so you can say "2b" for tab 2, item b. Keep `TABS.md` open beside a chat and you can see where every tab stands without scrolling back through each one.
 
 ```markdown
-## 2. Fix the login redirect · 3f9c2a1
+## 🟠 2. Fix the login redirect · 3f9c2a1
 
 ### About this tab
 Why the login page loops back to itself after a password reset.
@@ -68,6 +68,8 @@ The Paseo plugin reads Paseo's agent and workspace records every 2 seconds, and 
 
 - It creates `TABS.md` only at the top level of a git repository that has an open Claude tab. Whenever it writes the file, it makes sure `TABS.md` is in that repository's `.git/info/exclude`, so the file is never committed, even one a tab created by hand. In a worktree, the line goes in the main repository's exclude file.
 - Tabs are numbered in the order they were opened, matching the tab bar. Headings follow renames.
+- Each open tab's heading starts with a dot: 🟠 when something in its section waits on you, 🔵 when only its next steps are open, ✅ when nothing is open. A new tab and closed tabs get none.
+- Long names, usually Paseo's copy of a first message, are shortened for display: stray quotes and openers go, the first clause stays, and an ellipsis marks a cut. The names in Paseo stay as they are.
 - When a folder has tabs from more than one Paseo workspace, each workspace's tabs sit under a `# <workspace name> · <short id>` line, numbered on their own.
 - A closed tab's section moves to the bottom of its workspace, marked ` · closed`. It stays while anything in it is open, and goes once nothing is and the tab has been closed for 24 hours. Any unticked box counts as open, at any indent. A list line starting with "- Nothing" doesn't.
 - Sections it doesn't recognise, and any text above the first heading, are kept as written.
@@ -75,13 +77,25 @@ The Paseo plugin reads Paseo's agent and workspace records every 2 seconds, and 
 
 ### The Tabs panel
 
-Open it with Ctrl+K (⌘K on macOS) and "Open Tabs". It lists the workspace's tabs in tab-bar order, with how many items each has open under "Waiting on you" and "Claude's next steps". Tapping a tab opens it. Closed tabs that still have a section are listed below.
+Open it with Ctrl+K (⌘K on macOS) and "Open Tabs". It lists the workspace's tabs in tab-bar order, each with its dot, its "About this tab" line, and how many items are waiting on you and next. Tabs waiting on you are bold, with a coloured edge. Tapping a tab opens it. Closed tabs that still have a section are listed below, dimmed.
+
+### Settings
+
+Under Settings, Plugins, Tabs:
+
+- **Status dots**: the dots in TABS.md and the panel. On by default.
+- **Shorten long names**: the shortened display names. On by default.
+- **Longest name**: how many characters a shortened name keeps, 20 to 80. 40 by default.
+
+Every `TABS.md` is rewritten as soon as a setting changes.
 
 Paseo's own `paseo://` tab links do nothing when clicked inside Paseo, which is why the panel exists.
 
 ### The rule each tab gets
 
-The Claude Code plugin's SessionStart hook runs only inside Paseo, in a folder that is the top level of a git repository. It gives the tab [the rule](claude/rule.md) with its short ID and the path to `TABS.md` filled in. Outside Paseo it does nothing.
+The Claude Code plugin's SessionStart hook runs only inside Paseo, in a folder that is the top level of a git repository. It gives the tab [the rule](claude/rule.md) with its ID and the path to `TABS.md` filled in. Outside Paseo it does nothing.
+
+The rule also asks a tab that still carries Paseo's automatic name, the start of its first message, to give itself a short name once its topic is clear, and to do the same for a workspace whose name reads like a message. It never renames a tab you named. This needs Paseo's own tools inside agents, which the daemon setting `daemon.mcp.injectIntoAgents` turns on.
 
 ### Closed tabs
 
