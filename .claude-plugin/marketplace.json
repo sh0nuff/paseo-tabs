@@ -1,0 +1,14 @@
+{
+  "name": "paseo-tabs",
+  "description": "The paseo-tabs plugin for Claude Code",
+  "owner": {
+    "name": "sh0nuff"
+  },
+  "plugins": [
+    {
+      "name": "paseo-tabs",
+      "source": "./",
+      "description": "Gives every Claude tab in Paseo the TABS.md rule, so each tab keeps its own section of the workspace's live checklist current."
+    }
+  ]
+}
