@@ -30,7 +30,7 @@ The repository holds two plugins:
 
 ## Install
 
-You need Paseo 0.11.2 or later, running Claude Code agents. Plugins must be turned on in Paseo, under Settings, Plugins.
+You need Paseo 0.11.0 or later, for both the daemon and the app, running Claude Code agents. Plugins must be turned on in Paseo, under Settings, Plugins.
 
 Install the Paseo plugin from a shell on the machine that runs the Paseo daemon:
 
