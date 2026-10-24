@@ -66,10 +66,10 @@ Existing `TABS.md` files stay where they are. Delete them, and the `TABS.md` lin
 
 The Paseo plugin reads Paseo's agent and workspace records every 2 seconds, and rewrites a `TABS.md` whenever its tabs change.
 
-- It creates `TABS.md` only at the top level of a git repository that has an open Claude tab. It adds `TABS.md` to that repository's `.git/info/exclude` then, so the file is never committed. In a worktree, the line goes in the main repository's exclude file.
+- It creates `TABS.md` only at the top level of a git repository that has an open Claude tab. Whenever it writes the file, it makes sure `TABS.md` is in that repository's `.git/info/exclude`, so the file is never committed, even one a tab created by hand. In a worktree, the line goes in the main repository's exclude file.
 - Tabs are numbered in the order they were opened, matching the tab bar. Headings follow renames.
 - When a folder has tabs from more than one Paseo workspace, each workspace's tabs sit under a `# <workspace name> · <short id>` line, numbered on their own.
-- A closed tab's section moves to the bottom of its workspace, marked ` · closed`. It stays while anything in it is open, and goes once nothing is and the tab has been closed for 24 hours. A list line starting with "- Nothing" doesn't count as open.
+- A closed tab's section moves to the bottom of its workspace, marked ` · closed`. It stays while anything in it is open, and goes once nothing is and the tab has been closed for 24 hours. Any unticked box counts as open, at any indent. A list line starting with "- Nothing" doesn't.
 - Sections it doesn't recognise, and any text above the first heading, are kept as written.
 - It changes only headings, group lines and the order of sections. The text under each heading belongs to that tab. Before writing, it re-reads the file, so an agent's edit made a moment earlier is not lost.
 

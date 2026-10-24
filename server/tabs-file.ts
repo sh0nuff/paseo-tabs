@@ -15,9 +15,11 @@ import type { AgentRecord, WorkspaceRecord } from "./paseo-state.ts";
 
 export const PLACEHOLDER = "No items yet. This tab hasn't written to this file.";
 
-const TAB_HEADING = /^## (?:\d+\. )?(.*?) · ([0-9a-f]{7})( · closed)?[ \t]*$/;
-const GROUP_LINE = /^# (.*?) · ([0-9a-f]{7})( · archived)?[ \t]*$/;
-const DONE_ITEM = /^- (?:[a-z]+\) )?\[x\] /;
+const TAB_HEADING = /^## (?:\d+\. )?(.*?) · ([0-9A-Za-z]{7})( · closed)?[ \t]*$/;
+const GROUP_LINE = /^# (.*?) · ([0-9A-Za-z]{7})( · archived)?[ \t]*$/;
+const BULLET = /^\s*[-*+] /;
+const DONE_ITEM = /^\s*[-*+] (?:[a-z]+\) )?\[x\] /;
+const NOTHING_ITEM = /^\s*[-*+] Nothing/;
 const LABEL = /^\*\*.+\*\*\s*$/;
 const KEEP_CLOSED_MS = 24 * 3600 * 1000;
 const NO_WORKSPACE_SHORT = "0000000";
@@ -62,8 +64,11 @@ function resolveTitle(agent: AgentRecord, headingTitle: string | undefined): str
   return oneLine(agent.title ?? "") || oneLine(headingTitle ?? "") || "untitled";
 }
 
+// This guards the one path that removes text, so it leans towards "open": any
+// unticked box counts, at any indent, as does any list line that isn't ticked.
 function isOpenItem(line: string): boolean {
-  return line.startsWith("- ") && !DONE_ITEM.test(line) && !line.startsWith("- Nothing");
+  if (line.includes("[ ]")) return true;
+  return BULLET.test(line) && !DONE_ITEM.test(line) && !NOTHING_ITEM.test(line);
 }
 
 /** True if any list line in a section is not ticked. Unusual lines count as open. */

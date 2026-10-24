@@ -131,7 +131,15 @@ test("updates an existing file even with no open Claude tab", (t) => {
   assert.equal(syncFolder(repo, state(closed), NOW), "updated");
 
   assert.equal(readFileSync(join(repo, "TABS.md"), "utf8"), "## 1. A title · aaaaaaa · closed\n\n- a) [ ] item\n");
-  assert.deepEqual(excludeLines(repo), []);
+});
+
+test("adds the exclude line when it updates a file a tab created by hand", (t) => {
+  const repo = gitInit(join(tempDir(t), "repo"));
+  writeFileSync(join(repo, "TABS.md"), "## 9. Written by hand · aaaaaaa\n\n- a) [ ] item\n");
+
+  assert.equal(syncFolder(repo, state(agent("aaaaaaa1", repo)), NOW), "updated");
+
+  assert.deepEqual(excludeLines(repo), ["TABS.md"]);
 });
 
 test("syncFolder re-reads before writing", (t) => {

@@ -2,7 +2,7 @@
 
 This tab runs in Paseo. The user keeps `{{TABS_PATH}}` open beside the chat. It has one section per tab, so they can see what every tab is waiting on and has finished without scrolling back. Keep this tab's section current without being asked.
 
-**Your section** is the one whose heading ends with `· {{SHORT_ID}}`, your tab's short ID. The paseo-tabs Paseo plugin writes the headings, `## <n>. <tab name> · <short id>`, where n is the tab's place in its workspace's tab bar. It follows renames and marks closed tabs ` · closed`. When the file holds tabs from more than one workspace, it groups them under `# <workspace name> · <short id>` lines. If your heading is missing, the Paseo plugin isn't running here. Then add `## <n>. <tab name> · {{SHORT_ID}}` at the end of the file yourself, creating the file if it doesn't exist.
+**Your section** is the one whose heading ends with `· {{SHORT_ID}}`, your tab's short ID. The paseo-tabs Paseo plugin writes the headings, `## <n>. <tab name> · <short id>`, where n is the tab's place in its workspace's tab bar. It follows renames and marks closed tabs ` · closed`. When the file holds tabs from more than one workspace, it groups them under `# <workspace name> · <short id>` lines. If your heading is missing, the Paseo plugin isn't running here. Then add `## <n>. <tab name> · {{SHORT_ID}}` at the end of the file yourself. If you have to create the file, also add a `TABS.md` line to the repo's `.git/info/exclude`, so it is never committed.
 
 **Under your heading**, keep:
 - a `### About this tab` block with a one-line summary of what this tab is about

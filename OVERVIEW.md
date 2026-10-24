@@ -13,7 +13,7 @@ Agents only write their sections if they know the rule. The repository is also a
 ## What it reads and writes
 
 - It reads Paseo's agent and workspace records in the daemon's home folder, every 2 seconds.
-- It creates `TABS.md` only at the top level of a git repository that has an open Claude tab, and adds `TABS.md` to that repository's `.git/info/exclude` so the file is never committed.
+- It creates `TABS.md` only at the top level of a git repository that has an open Claude tab. Whenever it writes the file, it makes sure `TABS.md` is in that repository's `.git/info/exclude`, so the file is never committed.
 - Once a `TABS.md` exists, it rewrites only headings, group lines and the order of sections. The text under each heading belongs to that tab.
 - It sends nothing over the network.
 

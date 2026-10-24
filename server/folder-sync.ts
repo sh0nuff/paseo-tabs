@@ -1,8 +1,9 @@
 // Keeps one folder's TABS.md in step with the tabs open in it.
 //
 // TABS.md lives only at the top level of a git work tree. It is created when
-// the folder has an open Claude tab, and git is told to ignore it then, so it
-// is never committed. Once it exists it is kept in step whatever the tabs are.
+// the folder has an open Claude tab, and git is told to ignore it whenever it
+// is written, so it is never committed. Once it exists it is kept in step
+// whatever the tabs are.
 
 import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
@@ -13,7 +14,7 @@ import { planFolder, renderFolder } from "./tabs-file.ts";
 export interface FileIO {
   read(path: string): string | null;
   write(path: string, text: string): void;
-  /** Tells git to ignore a new TABS.md. Defaults to ensureExcluded. */
+  /** Tells git to ignore TABS.md after a write. Defaults to ensureExcluded. */
   exclude?(dir: string): void;
 }
 
@@ -90,7 +91,9 @@ export function syncFolder(
     const latest = io.read(path);
     if (latest === current) {
       io.write(path, next);
-      if (creating) (io.exclude ?? ensureExcluded)(cwd);
+      // Every write, not only the first: a tab may have created the file by
+      // hand, and TABS.md must never be committed.
+      (io.exclude ?? ensureExcluded)(cwd);
       return creating ? "created" : "updated";
     }
     current = latest;

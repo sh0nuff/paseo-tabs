@@ -158,6 +158,31 @@ test("a new tab with no title is untitled", () => {
   assert.equal(sync("", [agent("aaaaaaa1", { title: null })]), `## 1. untitled · aaaaaaa\n\n${NEW}\n`);
 });
 
+test("keeps a closed section whose only open item is indented after 24 hours", () => {
+  const text = "## 1. Shut · aaaaaaa · closed\n\n- a) [x] ~~parent~~\n  - b) [ ] still open\n";
+  const out = sync(text, [agent("aaaaaaa1", { title: "Shut", archivedAt: "2026-10-22T09:00:00.000Z" })]);
+  assert.equal(out, text);
+});
+
+test("counts indented, starred and plus bullets as open items", () => {
+  assert.equal(hasOpenItems("- a) [x] ~~done~~\n  - b) [ ] nested\n"), true);
+  assert.equal(hasOpenItems("* c) [ ] starred\n"), true);
+  assert.equal(hasOpenItems("+ d) [ ] plus\n"), true);
+  assert.equal(hasOpenItems("1. [ ] numbered\n"), true);
+  assert.equal(hasOpenItems("  - [x] nested done\n  * e) [x] ~~done~~\n  - Nothing left\n"), false);
+});
+
+test("settles with a workspace id that isn't hex", () => {
+  const alpha = ws("wks_mG4efdeZ9Bwh", "Alpha");
+  const agents = [
+    agent("aaaaaaa1", { workspaceId: alpha.id }),
+    agent("bbbbbbb2", { workspaceId: TWO.id, createdAt: "2026-10-24T10:00:00.000Z" }),
+  ];
+  const out = sync("", agents, [alpha, TWO]);
+  assert.match(out, /^# Alpha · mG4efde$/m);
+  assert.equal(sync(out, agents, [alpha, TWO]), out);
+});
+
 test("keeps unknown sections below the tabs", () => {
   const out = sync("## Notes\n\nfree text\n\n## 1. A title · aaaaaaa\n\nbody\n", [agent("aaaaaaa1")]);
   assert.equal(out, "## 1. A title · aaaaaaa\n\nbody\n\n## Notes\n\nfree text\n");
