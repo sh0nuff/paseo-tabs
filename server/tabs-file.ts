@@ -25,6 +25,8 @@ const NO_WORKSPACE_SHORT = "0000000";
 export interface TabEntry {
   agent: AgentRecord;
   short: string;
+  /** Paseo's name for the tab, else the name in its heading, else "untitled". */
+  title: string;
   number: number;
   closed: boolean;
   body: string;
@@ -56,9 +58,8 @@ function oneLine(value: string): string {
   return value.split(/\s+/).filter(Boolean).join(" ");
 }
 
-/** A tab's name as its heading shows it. */
-export function tabTitle(agent: AgentRecord): string {
-  return oneLine(agent.title ?? "untitled");
+function resolveTitle(agent: AgentRecord, headingTitle: string | undefined): string {
+  return oneLine(agent.title ?? "") || oneLine(headingTitle ?? "") || "untitled";
 }
 
 function isOpenItem(line: string): boolean {
@@ -128,6 +129,7 @@ export function planFolder(
   const here = new Map(agents.map((agent) => [shortAgentId(agent.id), agent]));
 
   const bodies = new Map<string, string>();
+  const headingTitles = new Map<string, string>();
   const unknown: string[] = [];
   for (const section of sections) {
     if (GROUP_LINE.test(section.heading)) {
@@ -138,6 +140,7 @@ export function planFolder(
     const match = TAB_HEADING.exec(section.heading);
     if (match && here.has(match[2]) && !bodies.has(match[2])) {
       bodies.set(match[2], section.body);
+      headingTitles.set(match[2], match[1]);
     } else {
       unknown.push(`${section.heading}\n${section.body}`);
     }
@@ -153,7 +156,8 @@ export function planFolder(
     if (closed && !hasOpenItems(text) && closedForADay(agent, now)) continue;
     const key = agent.workspaceId;
     if (!entries.has(key)) entries.set(key, { open: [], closed: [] });
-    const entry: TabEntry = { agent, short, number: 0, closed, body: text };
+    const title = resolveTitle(agent, headingTitles.get(short));
+    const entry: TabEntry = { agent, short, title, number: 0, closed, body: text };
     entries.get(key)![closed ? "closed" : "open"].push(entry);
   }
 
@@ -189,7 +193,7 @@ export function renderFolder(plan: FolderPlan): string {
   for (const group of plan.groups) {
     if (grouped) parts.push(`# ${group.title} · ${group.short}${group.archived ? " · archived" : ""}\n`);
     for (const tab of group.tabs) {
-      const heading = `## ${tab.number}. ${tabTitle(tab.agent)} · ${tab.short}${tab.closed ? " · closed" : ""}`;
+      const heading = `## ${tab.number}. ${tab.title} · ${tab.short}${tab.closed ? " · closed" : ""}`;
       parts.push(`${trimEnd(`${heading}\n${tab.body}`)}\n`);
     }
   }

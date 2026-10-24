@@ -140,6 +140,24 @@ test("collapses whitespace in titles", () => {
   assert.match(out, /^## 1\. Two lines here · aaaaaaa$/m);
 });
 
+test("keeps the heading's title when Paseo has none for the tab", () => {
+  const out = sync("## 4. Earring listings E1258-E1261 · 8ad9b52\n\nbody\n", [
+    agent("8ad9b52-full", { title: null }),
+  ]);
+  assert.equal(out, "## 1. Earring listings E1258-E1261 · 8ad9b52\n\nbody\n");
+});
+
+test("keeps a closed heading's title when Paseo has none for the tab", () => {
+  const out = sync("## 5. Earring listings E1255-E1257 · 2215f27 · closed\n\n- a) [ ] item\n", [
+    agent("2215f27-full", { title: null, archivedAt: "2026-10-24T11:00:00.000Z" }),
+  ]);
+  assert.equal(out, "## 1. Earring listings E1255-E1257 · 2215f27 · closed\n\n- a) [ ] item\n");
+});
+
+test("a new tab with no title is untitled", () => {
+  assert.equal(sync("", [agent("aaaaaaa1", { title: null })]), `## 1. untitled · aaaaaaa\n\n${NEW}\n`);
+});
+
 test("keeps unknown sections below the tabs", () => {
   const out = sync("## Notes\n\nfree text\n\n## 1. A title · aaaaaaa\n\nbody\n", [agent("aaaaaaa1")]);
   assert.equal(out, "## 1. A title · aaaaaaa\n\nbody\n\n## Notes\n\nfree text\n");

@@ -61,6 +61,14 @@ test("listTabs lists a closed tab that still has a section after the open ones",
   );
 });
 
+test("listTabs uses the heading's title when Paseo has none for the tab", (t) => {
+  const { home, repo } = setup(t);
+  writeAgent(home, { id: "aaaaaaa1-full", cwd: repo, workspaceId: ONE, title: null });
+  writeFileSync(join(repo, "TABS.md"), "## 3. Ring listings R1519 · aaaaaaa\n\nbody\n");
+
+  assert.equal(listTabs(home, ONE, NOW)[0].title, "Ring listings R1519");
+});
+
 test("listTabs returns nothing for an unknown workspace", (t) => {
   const { home, repo } = setup(t);
   writeAgent(home, { id: "aaaaaaa1-full", cwd: repo, workspaceId: ONE });

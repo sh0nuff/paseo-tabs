@@ -4,7 +4,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadState } from "./paseo-state.ts";
-import { countOpen, planFolder, tabTitle } from "./tabs-file.ts";
+import { countOpen, planFolder } from "./tabs-file.ts";
 
 export interface TabRow {
   agentId: string;
@@ -40,7 +40,7 @@ export function listTabs(home: string, workspaceId: string, now: Date = new Date
     agentId: tab.agent.id,
     short: tab.short,
     number: tab.number,
-    title: tabTitle(tab.agent),
+    title: tab.title,
     closed: tab.closed,
     waiting: countOpen(tab.body, "Waiting on you"),
     next: countOpen(tab.body, "Claude's next steps"),
