@@ -1,26 +1,23 @@
-<!--
-OVERVIEW.md is required to list your plugin in the registry. Keep it beside
-paseo-plugin.json in your repository at the pinned commit and in your npm package.
-Replace this comment with useful facts before publishing.
+Tabs keeps a live checklist of every tab in a workspace, in a `TABS.md` file at the top of the repository, and adds a Tabs panel that jumps to any tab in one tap.
 
-This overview is for people choosing a plugin in Paseo, on the plugin page under
-its install command. README assumes a GitHub audience and includes technical
-details, installation instructions, and badges. Long, AI-generated READMEs leave
-people reading past that material to understand what the plugin does.
+Each tab gets its own section, headed by its number in the tab bar, its name and a short ID. Agents write what they are waiting on, their next steps and what they have done under their own heading, so you can see where every tab stands without scrolling back through each chat. Open `TABS.md` beside a chat to watch it update.
 
-Write these parts in order, including only what helps someone decide to install:
+The plugin keeps the headings in step with your tabs. It numbers them in the order they were opened, follows renames, and moves closed tabs to the bottom. A closed tab's section stays while anything in it is still open, and goes 24 hours after the tab closed once nothing is. When two workspaces share one folder, each gets its own group with its own numbers.
 
-1. Describe what your plugin is and does in plain terms first.
-2. Explain how it works only when it is not obvious.
-3. Explain setup when needed: settings, accounts, tokens, providers, tools, or
-   other plugins. Include applicable daemon version and operating system
-   requirements. Setup guidance is allowed; installation instructions are not.
-4. Explain capabilities and settings worth understanding, what each option does,
-   what the plugin reads or sends and where, permissions, and known limits.
+The Tabs panel lists the workspace's tabs with how many items each has open. Tapping a tab opens it, on desktop and on mobile.
 
-Length follows complexity; a theme needs one paragraph. Choose headings only
-when they help. Use sentence case and plain factual language, with no em dashes.
-Omit installation commands, badges, changelog, contributing or license sections,
-marketing, and unsupported claims. Avoid implementation filler such as empty
-cleanup functions, theme-token field lists, or lists of absent features.
--->
+## Setup
+
+Agents only write their sections if they know the rule. The repository is also a Claude Code plugin that gives every Claude tab the rule when it starts. Agents from other providers still get a numbered heading.
+
+## What it reads and writes
+
+- It reads Paseo's agent and workspace records in the daemon's home folder, every 2 seconds.
+- It creates `TABS.md` only at the top level of a git repository that has an open Claude tab, and adds `TABS.md` to that repository's `.git/info/exclude` so the file is never committed.
+- Once a `TABS.md` exists, it rewrites only headings, group lines and the order of sections. The text under each heading belongs to that tab.
+- It sends nothing over the network.
+
+## Limits
+
+- A closed tab can be brought back by sending it a message, history included, for as long as Claude Code keeps its transcript. By default that is 30 days, set by Claude Code's `cleanupPeriodDays`.
+- Tested on Linux with Paseo 0.11.2.
