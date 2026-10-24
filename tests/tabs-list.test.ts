@@ -65,9 +65,9 @@ test("listTabs lists a closed tab that still has a section after the open ones",
 test("listTabs uses the heading's title when Paseo has none for the tab", (t) => {
   const { home, repo } = setup(t);
   writeAgent(home, { id: "aaaaaaa1-full", cwd: repo, workspaceId: ONE, title: null });
-  writeFileSync(join(repo, "TABS.md"), "## 3. Ring listings R1519 · aaaaaaa\n\nbody\n");
+  writeFileSync(join(repo, "TABS.md"), "## 3. Shelf labels A1-A3 · aaaaaaa\n\nbody\n");
 
-  assert.equal(listTabs(home, ONE, NOW)[0].title, "Ring listings R1519");
+  assert.equal(listTabs(home, ONE, NOW)[0].title, "Shelf labels A1-A3");
 });
 
 test("listTabs returns nothing for an unknown workspace", (t) => {
@@ -94,9 +94,9 @@ test("listTabs gives each tab its About line and status", (t) => {
 
 test("listTabs shortens long names unless told not to", (t) => {
   const { home, repo } = setup(t);
-  const long = "I need to re-add assetdev to my phone's paseo since we moved";
+  const long = "I need to re-add the laptop to my phone's app since we moved";
   writeAgent(home, { id: "aaaaaaa1-full", cwd: repo, workspaceId: ONE, title: long });
 
-  assert.equal(listTabs(home, ONE, NOW)[0].title, "Re-add assetdev to my phone's paseo…");
+  assert.equal(listTabs(home, ONE, NOW)[0].title, "Re-add the laptop to my phone's app…");
   assert.equal(listTabs(home, ONE, NOW, { ...DEFAULT_DISPLAY, shortenNames: false })[0].title, long);
 });

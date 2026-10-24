@@ -8,10 +8,10 @@ import { gitInit, makeHome, tempDir, writeAgent, writeWorkspaces } from "./helpe
 
 type Listener = (state: unknown) => void;
 
-function fakeServer() {
+function fakeServer(initial?: unknown) {
   const listeners: Listener[] = [];
   const handlers = new Map<string, (input: unknown) => unknown>();
-  let stored: unknown = { status: "ready", revision: "1", values: { statusDots: true, shortenNames: true, maxNameLength: 40 } };
+  let stored: unknown = initial ?? { status: "ready", revision: "1", values: { statusDots: true, shortenNames: true, maxNameLength: 40 } };
   const server = {
     registerSettings: () => ({
       read: async () => stored,
@@ -59,4 +59,27 @@ test("the plugin entry applies saved settings and serves tabs.list", async (t) =
 
   const result = (await handlers.get("tabs.list")!({ workspaceId: "wks_1111111aaaaaaa" })) as { tabs: { status: string }[] };
   assert.equal(result.tabs[0].status, "waiting");
+});
+
+test("the first write uses the saved settings, not the defaults", async (t) => {
+  const root = tempDir(t);
+  const home = makeHome(root);
+  const repo = gitInit(join(root, "repo"));
+  writeAgent(home, { id: "aaaaaaa1-full", cwd: repo });
+  const text = "## 1. A title · aaaaaaa\n\n**Waiting on you**\n- a) [ ] answer\n";
+  writeFileSync(join(repo, "TABS.md"), text);
+  const previousHome = process.env.PASEO_HOME;
+  process.env.PASEO_HOME = home;
+  const { server } = fakeServer({ status: "ready", revision: "1", values: { statusDots: false, shortenNames: true, maxNameLength: 40 } });
+
+  const cleanup = contribute(server as never);
+  t.after(async () => {
+    await cleanup?.();
+    if (previousHome === undefined) delete process.env.PASEO_HOME;
+    else process.env.PASEO_HOME = previousHome;
+  });
+
+  assert.equal(readFileSync(join(repo, "TABS.md"), "utf8"), text);
+  await sleep(20);
+  assert.equal(readFileSync(join(repo, "TABS.md"), "utf8"), text);
 });

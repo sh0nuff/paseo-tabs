@@ -79,8 +79,15 @@ function oneLine(value: string): string {
   return value.split(/\s+/).filter(Boolean).join(" ");
 }
 
-function resolveTitle(agent: AgentRecord, headingTitle: string | undefined): string {
-  return oneLine(agent.title ?? "") || oneLine(headingTitle ?? "") || "untitled";
+// Paseo's name for the tab, shortened for display if set. With no name in Paseo,
+// the heading itself is the only copy of the name, so it is kept whole.
+function resolveTitle(
+  agent: AgentRecord,
+  headingTitle: string | undefined,
+  display: (name: string) => string,
+): string {
+  if (oneLine(agent.title ?? "")) return display(agent.title ?? "");
+  return oneLine(headingTitle ?? "") || "untitled";
 }
 
 // This guards the one path that removes text, so it leans towards "open": any
@@ -102,7 +109,7 @@ export function aboutLine(body: string): string {
   if (start === -1) return "";
   for (const line of lines.slice(start + 1)) {
     if (line.startsWith("#") || LABEL.test(line) || line.startsWith("Last updated")) return "";
-    if (line.trim()) return line.trim();
+    if (line.trim()) return line.trim().replace(/^[-*+]\s+/, "");
   }
   return "";
 }
@@ -112,6 +119,8 @@ export function tabStatus(body: string): TabStatus {
   if (!SECTION_LABELS.test(body)) return null;
   if (countOpen(body, "Waiting on you") > 0) return "waiting";
   if (countOpen(body, "Claude's next steps") > 0) return "next";
+  // A tick must never sit over an unticked box, wherever in the section it is.
+  if (body.includes("[ ]")) return "next";
   return "done";
 }
 
@@ -202,7 +211,7 @@ export function planFolder(
     if (closed && !hasOpenItems(text) && closedForADay(agent, now)) continue;
     const key = agent.workspaceId;
     if (!entries.has(key)) entries.set(key, { open: [], closed: [] });
-    const title = display(resolveTitle(agent, headingTitles.get(short)));
+    const title = resolveTitle(agent, headingTitles.get(short), display);
     const entry: TabEntry = { agent, short, title, number: 0, closed, status: tabStatus(text), body: text };
     entries.get(key)![closed ? "closed" : "open"].push(entry);
   }

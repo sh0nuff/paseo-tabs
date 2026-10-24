@@ -67,3 +67,18 @@ test("refresh re-syncs at once with the current display options", (t) => {
 
   assert.match(readFileSync(join(repo, "TABS.md"), "utf8"), /^## 🟠 1\. A title · aaaaaaa$/m);
 });
+
+test("re-syncs when a tab edits TABS.md, with no change to Paseo's records", async (t) => {
+  const root = tempDir(t);
+  const home = makeHome(root);
+  const repo = gitInit(join(root, "repo"));
+  writeAgent(home, { id: "aaaaaaa1", cwd: repo });
+  const watcher = startWatcher(home, { intervalMs: 50 });
+  t.after(watcher.stop);
+  assert.match(readFileSync(join(repo, "TABS.md"), "utf8"), /^## 1\. A title · aaaaaaa$/m);
+
+  writeFileSync(join(repo, "TABS.md"), "## 1. A title · aaaaaaa\n\n**Waiting on you**\n- a) [ ] answer me\n");
+  await sleep(300);
+
+  assert.match(readFileSync(join(repo, "TABS.md"), "utf8"), /^## 🟠 1\. A title · aaaaaaa$/m);
+});

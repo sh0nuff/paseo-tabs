@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { AgentRecord, WorkspaceRecord } from "../server/paseo-state.ts";
-import { DEFAULT_DISPLAY, countOpen, hasOpenItems, planFolder, renderFolder } from "../server/tabs-file.ts";
+import { DEFAULT_DISPLAY, aboutLine, countOpen, hasOpenItems, planFolder, renderFolder } from "../server/tabs-file.ts";
 
 const NOW = new Date("2026-10-24T12:00:00.000Z");
 const NEW = "No items yet. This tab hasn't written to this file.";
@@ -141,17 +141,17 @@ test("collapses whitespace in titles", () => {
 });
 
 test("keeps the heading's title when Paseo has none for the tab", () => {
-  const out = sync("## 4. Earring listings E1258-E1261 · 8ad9b52\n\nbody\n", [
+  const out = sync("## 4. Shelf labels A1-A3 · 8ad9b52\n\nbody\n", [
     agent("8ad9b52-full", { title: null }),
   ]);
-  assert.equal(out, "## 1. Earring listings E1258-E1261 · 8ad9b52\n\nbody\n");
+  assert.equal(out, "## 1. Shelf labels A1-A3 · 8ad9b52\n\nbody\n");
 });
 
 test("keeps a closed heading's title when Paseo has none for the tab", () => {
-  const out = sync("## 5. Earring listings E1255-E1257 · 2215f27 · closed\n\n- a) [ ] item\n", [
+  const out = sync("## 5. Shelf labels B1-B3 · 2215f27 · closed\n\n- a) [ ] item\n", [
     agent("2215f27-full", { title: null, archivedAt: "2026-10-24T11:00:00.000Z" }),
   ]);
-  assert.equal(out, "## 1. Earring listings E1255-E1257 · 2215f27 · closed\n\n- a) [ ] item\n");
+  assert.equal(out, "## 1. Shelf labels B1-B3 · 2215f27 · closed\n\n- a) [ ] item\n");
 });
 
 test("a new tab with no title is untitled", () => {
@@ -209,8 +209,8 @@ test("gives no dot to a new tab or a closed one", () => {
 
 test("reads a heading with a dot back, and a second pass changes nothing", () => {
   const agents = [agent("aaaaaaa1", { title: null })];
-  const out = sync(`## 🔵 4. Earring listing E1262 · aaaaaaa\n${WAITING}`, agents);
-  assert.equal(out, `## 🟠 1. Earring listing E1262 · aaaaaaa\n${WAITING}`);
+  const out = sync(`## 🔵 4. Shelf label C1 · aaaaaaa\n${WAITING}`, agents);
+  assert.equal(out, `## 🟠 1. Shelf label C1 · aaaaaaa\n${WAITING}`);
   assert.equal(sync(out, agents), out);
 });
 
@@ -225,21 +225,36 @@ test("shortens long tab and workspace names when the setting is on", () => {
   const out = sync(
     "",
     [
-      agent("aaaaaaa1", { title: "I need to re-add assetdev to my phone's paseo since we moved", workspaceId: ONE.id }),
+      agent("aaaaaaa1", { title: "I need to re-add the laptop to my phone's app since we moved", workspaceId: ONE.id }),
       agent("bbbbbbb2", { workspaceId: TWO.id, createdAt: "2026-10-24T10:00:00.000Z" }),
     ],
-    [ws(ONE.id, '"Make `proj new` work on assetdev. The `gh` token is being g'), TWO],
+    [ws(ONE.id, '"Make `proj new` work on the server. The `gh` token is being g'), TWO],
   );
-  assert.match(out, /^# Make proj new work on assetdev · 1111111$/m);
-  assert.match(out, /^## 1\. Re-add assetdev to my phone's paseo… · aaaaaaa$/m);
+  assert.match(out, /^# Make proj new work on the server · 1111111$/m);
+  assert.match(out, /^## 1\. Re-add the laptop to my phone's app… · aaaaaaa$/m);
 });
 
 test("keeps long names when the setting is off", () => {
-  const long = "I need to re-add assetdev to my phone's paseo since we moved";
+  const long = "I need to re-add the laptop to my phone's app since we moved";
   const out = renderFolder(
     planFolder("", [agent("aaaaaaa1", { title: long })], [ONE], NOW, { ...DEFAULT_DISPLAY, shortenNames: false }),
   );
   assert.match(out, new RegExp(`^## 1\\. ${long} · aaaaaaa$`, "m"));
+});
+
+test("keeps a hand-written heading name whole when Paseo has none, however long", () => {
+  const name = "Shelf labels A1-A3, the second batch, with the new photos from the studio";
+  const out = sync(`## 4. ${name} · aaaaaaa\n\nbody\n`, [agent("aaaaaaa1", { title: null })]);
+  assert.equal(out, `## 1. ${name} · aaaaaaa\n\nbody\n`);
+});
+
+test("never shows a tick over an unticked box", () => {
+  const body = "\n**Waiting on you**\n- Nothing open.\n\n**Done**\n- a) [x] ~~done~~\n- c) [ ] left under Done\n";
+  assert.equal(sync(`## 1. A title · aaaaaaa\n${body}`, [agent("aaaaaaa1")]), `## 🔵 1. A title · aaaaaaa\n${body}`);
+});
+
+test("aboutLine drops a leading bullet", () => {
+  assert.equal(aboutLine("\n### About this tab\n- Fixing the login loop.\n"), "Fixing the login loop.");
 });
 
 test("keeps unknown sections below the tabs", () => {
