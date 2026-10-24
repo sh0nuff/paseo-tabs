@@ -1,7 +1,9 @@
 // The TABS.md format: one section per tab, grouped by Paseo workspace.
 //
-// A tab's heading is "## <n>. <title> · <first 7 characters of its agent id>",
-// with " · closed" once the tab is archived. n is the tab's place in its
+// A tab's heading is "## <dot> <n>. <title> · <first 7 characters of its agent
+// id>", with " · closed" once the tab is archived. The dot shows where the tab
+// stands: orange when something waits on the user, blue when only Claude has
+// next steps, a tick when nothing is open, and none for a new or closed tab. n is the tab's place in its
 // workspace's tab bar, in the order the tabs were opened, and closed tabs carry
 // on after the open ones. When a file holds tabs from more than one workspace,
 // each workspace's sections sit under "# <workspace title> · <7 characters of
@@ -11,26 +13,42 @@
 // A closed tab's section stays while anything in it is open. It goes once
 // nothing is open and the tab has been closed for 24 hours.
 
+import { shortenName } from "./names.ts";
 import type { AgentRecord, WorkspaceRecord } from "./paseo-state.ts";
 
 export const PLACEHOLDER = "No items yet. This tab hasn't written to this file.";
 
-const TAB_HEADING = /^## (?:\d+\. )?(.*?) · ([0-9A-Za-z]{7})( · closed)?[ \t]*$/;
+const TAB_HEADING = /^## (?:(?:🟠|🔵|✅) )?(?:\d+\. )?(.*?) · ([0-9A-Za-z]{7})( · closed)?[ \t]*$/u;
 const GROUP_LINE = /^# (.*?) · ([0-9A-Za-z]{7})( · archived)?[ \t]*$/;
 const BULLET = /^\s*[-*+] /;
 const DONE_ITEM = /^\s*[-*+] (?:[a-z]+\) )?\[x\] /;
 const NOTHING_ITEM = /^\s*[-*+] Nothing/;
 const LABEL = /^\*\*.+\*\*\s*$/;
+const SECTION_LABELS = /^\*\*(?:Waiting on you|Claude's next steps|Done)\*\*\s*$/m;
+const DOTS = { waiting: "🟠", next: "🔵", done: "✅" } as const;
 const KEEP_CLOSED_MS = 24 * 3600 * 1000;
 const NO_WORKSPACE_SHORT = "0000000";
+
+/** How TABS.md is shown. These are the plugin's settings in Paseo. */
+export interface DisplayOptions {
+  statusDots: boolean;
+  shortenNames: boolean;
+  maxNameLength: number;
+}
+
+export const DEFAULT_DISPLAY: DisplayOptions = { statusDots: true, shortenNames: true, maxNameLength: 40 };
+
+/** null for a section with none of the usual labels yet, such as a new tab's placeholder. */
+export type TabStatus = "waiting" | "next" | "done" | null;
 
 export interface TabEntry {
   agent: AgentRecord;
   short: string;
-  /** Paseo's name for the tab, else the name in its heading, else "untitled". */
+  /** Paseo's name for the tab, else the name in its heading, else "untitled", shortened if set. */
   title: string;
   number: number;
   closed: boolean;
+  status: TabStatus;
   body: string;
 }
 
@@ -46,6 +64,7 @@ export interface FolderPlan {
   preamble: string;
   groups: WorkspaceGroup[];
   unknown: string[];
+  dots: boolean;
 }
 
 export function shortAgentId(id: string): string {
@@ -74,6 +93,14 @@ function isOpenItem(line: string): boolean {
 /** True if any list line in a section is not ticked. Unusual lines count as open. */
 export function hasOpenItems(body: string): boolean {
   return body.split("\n").some(isOpenItem);
+}
+
+/** Where a tab stands, from its own section. */
+export function tabStatus(body: string): TabStatus {
+  if (!SECTION_LABELS.test(body)) return null;
+  if (countOpen(body, "Waiting on you") > 0) return "waiting";
+  if (countOpen(body, "Claude's next steps") > 0) return "next";
+  return "done";
 }
 
 /** Open items under one bold label, up to the next label. */
@@ -129,7 +156,9 @@ export function planFolder(
   agents: AgentRecord[],
   workspaces: WorkspaceRecord[],
   now: Date,
+  options: DisplayOptions = DEFAULT_DISPLAY,
 ): FolderPlan {
+  const display = (name: string) => (options.shortenNames ? shortenName(name, options.maxNameLength) : oneLine(name));
   const { preamble, sections } = splitSections(text);
   const here = new Map(agents.map((agent) => [shortAgentId(agent.id), agent]));
 
@@ -161,8 +190,8 @@ export function planFolder(
     if (closed && !hasOpenItems(text) && closedForADay(agent, now)) continue;
     const key = agent.workspaceId;
     if (!entries.has(key)) entries.set(key, { open: [], closed: [] });
-    const title = resolveTitle(agent, headingTitles.get(short));
-    const entry: TabEntry = { agent, short, title, number: 0, closed, body: text };
+    const title = display(resolveTitle(agent, headingTitles.get(short)));
+    const entry: TabEntry = { agent, short, title, number: 0, closed, status: tabStatus(text), body: text };
     entries.get(key)![closed ? "closed" : "open"].push(entry);
   }
 
@@ -174,7 +203,7 @@ export function planFolder(
     groups.push({
       id,
       short: id ? shortWorkspaceId(id) : NO_WORKSPACE_SHORT,
-      title: oneLine(id ? workspace?.title ?? id : "Other tabs"),
+      title: display(id ? workspace?.title ?? id : "Other tabs"),
       archived: Boolean(workspace?.archivedAt),
       tabs,
       first: tabs.map((tab) => tab.agent.createdAt).sort()[0],
@@ -184,7 +213,12 @@ export function planFolder(
     a.archived !== b.archived ? (a.archived ? 1 : -1) : a.first < b.first ? -1 : a.first > b.first ? 1 : 0,
   );
 
-  return { preamble, groups: groups.map(({ first: _first, ...group }) => group), unknown };
+  return {
+    preamble,
+    groups: groups.map(({ first: _first, ...group }) => group),
+    unknown,
+    dots: options.statusDots,
+  };
 }
 
 function trimEnd(value: string): string {
@@ -198,7 +232,8 @@ export function renderFolder(plan: FolderPlan): string {
   for (const group of plan.groups) {
     if (grouped) parts.push(`# ${group.title} · ${group.short}${group.archived ? " · archived" : ""}\n`);
     for (const tab of group.tabs) {
-      const heading = `## ${tab.number}. ${tab.title} · ${tab.short}${tab.closed ? " · closed" : ""}`;
+      const dot = plan.dots && !tab.closed && tab.status ? `${DOTS[tab.status]} ` : "";
+      const heading = `## ${dot}${tab.number}. ${tab.title} · ${tab.short}${tab.closed ? " · closed" : ""}`;
       parts.push(`${trimEnd(`${heading}\n${tab.body}`)}\n`);
     }
   }

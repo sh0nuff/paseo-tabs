@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { AgentRecord, WorkspaceRecord } from "../server/paseo-state.ts";
-import { countOpen, hasOpenItems, planFolder, renderFolder } from "../server/tabs-file.ts";
+import { DEFAULT_DISPLAY, countOpen, hasOpenItems, planFolder, renderFolder } from "../server/tabs-file.ts";
 
 const NOW = new Date("2026-10-24T12:00:00.000Z");
 const NEW = "No items yet. This tab hasn't written to this file.";
@@ -181,6 +181,65 @@ test("settles with a workspace id that isn't hex", () => {
   const out = sync("", agents, [alpha, TWO]);
   assert.match(out, /^# Alpha · mG4efde$/m);
   assert.equal(sync(out, agents, [alpha, TWO]), out);
+});
+
+const WAITING = "\n**Waiting on you**\n- a) [ ] answer me\n\n**Claude's next steps**\n- b) [ ] later\n";
+const NEXT_ONLY = "\n**Waiting on you**\n- Nothing open.\n\n**Claude's next steps**\n- b) [ ] later\n";
+const ALL_DONE = "\n**Waiting on you**\n- Nothing open.\n\n**Done**\n- a) [x] ~~done~~\n";
+
+test("marks a tab waiting on you with an orange dot", () => {
+  assert.equal(sync(`## 1. A title · aaaaaaa\n${WAITING}`, [agent("aaaaaaa1")]), `## 🟠 1. A title · aaaaaaa\n${WAITING}`);
+});
+
+test("marks a tab with only Claude's next steps with a blue dot", () => {
+  assert.equal(sync(`## 1. A title · aaaaaaa\n${NEXT_ONLY}`, [agent("aaaaaaa1")]), `## 🔵 1. A title · aaaaaaa\n${NEXT_ONLY}`);
+});
+
+test("marks a tab with nothing open with a tick", () => {
+  assert.equal(sync(`## 1. A title · aaaaaaa\n${ALL_DONE}`, [agent("aaaaaaa1")]), `## ✅ 1. A title · aaaaaaa\n${ALL_DONE}`);
+});
+
+test("gives no dot to a new tab or a closed one", () => {
+  const out = sync(`## 2. Shut · bbbbbbb\n${WAITING}`, [
+    agent("aaaaaaa1", { createdAt: "2026-10-24T10:00:00.000Z" }),
+    agent("bbbbbbb2", { title: "Shut", archivedAt: "2026-10-24T11:00:00.000Z" }),
+  ]);
+  assert.equal(out, `## 1. A title · aaaaaaa\n\n${NEW}\n\n## 2. Shut · bbbbbbb · closed\n${WAITING}`);
+});
+
+test("reads a heading with a dot back, and a second pass changes nothing", () => {
+  const agents = [agent("aaaaaaa1", { title: null })];
+  const out = sync(`## 🔵 4. Earring listing E1262 · aaaaaaa\n${WAITING}`, agents);
+  assert.equal(out, `## 🟠 1. Earring listing E1262 · aaaaaaa\n${WAITING}`);
+  assert.equal(sync(out, agents), out);
+});
+
+test("leaves dots off when the setting is off", () => {
+  const out = renderFolder(
+    planFolder(`## 🟠 1. A title · aaaaaaa\n${WAITING}`, [agent("aaaaaaa1")], [ONE], NOW, { ...DEFAULT_DISPLAY, statusDots: false }),
+  );
+  assert.equal(out, `## 1. A title · aaaaaaa\n${WAITING}`);
+});
+
+test("shortens long tab and workspace names when the setting is on", () => {
+  const out = sync(
+    "",
+    [
+      agent("aaaaaaa1", { title: "I need to re-add assetdev to my phone's paseo since we moved", workspaceId: ONE.id }),
+      agent("bbbbbbb2", { workspaceId: TWO.id, createdAt: "2026-10-24T10:00:00.000Z" }),
+    ],
+    [ws(ONE.id, '"Make `proj new` work on assetdev. The `gh` token is being g'), TWO],
+  );
+  assert.match(out, /^# Make proj new work on assetdev · 1111111$/m);
+  assert.match(out, /^## 1\. Re-add assetdev to my phone's paseo… · aaaaaaa$/m);
+});
+
+test("keeps long names when the setting is off", () => {
+  const long = "I need to re-add assetdev to my phone's paseo since we moved";
+  const out = renderFolder(
+    planFolder("", [agent("aaaaaaa1", { title: long })], [ONE], NOW, { ...DEFAULT_DISPLAY, shortenNames: false }),
+  );
+  assert.match(out, new RegExp(`^## 1\\. ${long} · aaaaaaa$`, "m"));
 });
 
 test("keeps unknown sections below the tabs", () => {
