@@ -85,7 +85,7 @@ Under Settings, Plugins, Tabs:
 
 - **Status dots**: the dots in TABS.md and the panel. On by default.
 - **Shorten long names**: the shortened display names. On by default.
-- **Longest name**: how many characters a shortened name keeps, 20 to 80. 40 by default.
+- **Longest name**: how many characters a shortened name keeps, from 25 to 80. 40 by default.
 
 Every `TABS.md` is rewritten as soon as a setting changes.
 

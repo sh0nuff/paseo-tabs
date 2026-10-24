@@ -8,7 +8,7 @@ import { type TabRow, tabsList } from "../shared/tabs-rpc.ts";
 const DOTS = { waiting: "🟠", next: "🔵", done: "✅" } as const;
 
 function summary(tab: TabRow): string {
-  if (tab.status === null) return "No items yet";
+  if (tab.status === null) return "No checklist yet";
   const parts = [];
   if (tab.waiting > 0) parts.push(`${tab.waiting} waiting on you`);
   if (tab.next > 0) parts.push(`${tab.next} next`);
