@@ -9,6 +9,8 @@ export const tabRow = z.object({
   closed: z.boolean(),
   waiting: z.number(),
   next: z.number(),
+  status: z.enum(["waiting", "next", "done"]).nullable(),
+  about: z.string(),
 });
 
 export type TabRow = z.infer<typeof tabRow>;

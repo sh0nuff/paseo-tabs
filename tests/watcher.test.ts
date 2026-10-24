@@ -1,8 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
+import { DEFAULT_DISPLAY } from "../server/tabs-file.ts";
 import { startWatcher, syncAll } from "../server/watcher.ts";
 import { NOW, gitInit, makeHome, tempDir, writeAgent } from "./helpers.ts";
 
@@ -40,12 +41,29 @@ test("startWatcher syncs once at start and again after a change", async (t) => {
   const repo = gitInit(join(root, "repo"));
   writeAgent(home, { id: "aaaaaaa1", cwd: repo }, new Date("2026-10-24T09:00:00Z"));
 
-  const stop = startWatcher(home, 50);
-  t.after(stop);
+  const watcher = startWatcher(home, { intervalMs: 50 });
+  t.after(watcher.stop);
   assert.match(readFileSync(join(repo, "TABS.md"), "utf8"), /^## 1\. A title · aaaaaaa$/m);
 
   writeAgent(home, { id: "aaaaaaa1", cwd: repo, title: "Renamed title" }, new Date("2026-10-24T09:00:07Z"));
   await sleep(300);
 
   assert.match(readFileSync(join(repo, "TABS.md"), "utf8"), /^## 1\. Renamed title · aaaaaaa$/m);
+});
+
+test("refresh re-syncs at once with the current display options", (t) => {
+  const root = tempDir(t);
+  const home = makeHome(root);
+  const repo = gitInit(join(root, "repo"));
+  writeAgent(home, { id: "aaaaaaa1", cwd: repo });
+  writeFileSync(join(repo, "TABS.md"), "## 1. A title · aaaaaaa\n\n**Waiting on you**\n- a) [ ] answer\n");
+  let dots = false;
+  const watcher = startWatcher(home, { intervalMs: 60_000, display: () => ({ ...DEFAULT_DISPLAY, statusDots: dots }) });
+  t.after(watcher.stop);
+  assert.match(readFileSync(join(repo, "TABS.md"), "utf8"), /^## 1\. A title · aaaaaaa$/m);
+
+  dots = true;
+  watcher.refresh();
+
+  assert.match(readFileSync(join(repo, "TABS.md"), "utf8"), /^## 🟠 1\. A title · aaaaaaa$/m);
 });

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { listTabs } from "../server/tabs-list.ts";
+import { DEFAULT_DISPLAY } from "../server/tabs-file.ts";
 import { NOW, gitInit, makeHome, tempDir, writeAgent, writeWorkspaces } from "./helpers.ts";
 
 const ONE = "wks_1111111aaaaaaa";
@@ -31,8 +32,8 @@ test("listTabs returns this workspace's tabs with open-item counts", (t) => {
   );
 
   assert.deepEqual(listTabs(home, ONE, NOW), [
-    { agentId: "aaaaaaa1-full", short: "aaaaaaa", number: 1, title: "A title", closed: false, waiting: 1, next: 2 },
-    { agentId: "bbbbbbb2-full", short: "bbbbbbb", number: 2, title: "B title", closed: false, waiting: 0, next: 0 },
+    { agentId: "aaaaaaa1-full", short: "aaaaaaa", number: 1, title: "A title", closed: false, waiting: 1, next: 2, status: "waiting", about: "" },
+    { agentId: "bbbbbbb2-full", short: "bbbbbbb", number: 2, title: "B title", closed: false, waiting: 0, next: 0, status: null, about: "" },
   ]);
 });
 
@@ -42,7 +43,7 @@ test("listTabs works without a TABS.md, with zero counts", (t) => {
   writeAgent(home, { id: "bbbbbbb2-full", cwd: repo, workspaceId: ONE, archivedAt: "2026-10-24T11:00:00.000Z" });
 
   assert.deepEqual(listTabs(home, ONE, NOW), [
-    { agentId: "aaaaaaa1-full", short: "aaaaaaa", number: 1, title: "A title", closed: false, waiting: 0, next: 0 },
+    { agentId: "aaaaaaa1-full", short: "aaaaaaa", number: 1, title: "A title", closed: false, waiting: 0, next: 0, status: null, about: "" },
   ]);
 });
 
@@ -74,4 +75,28 @@ test("listTabs returns nothing for an unknown workspace", (t) => {
   writeAgent(home, { id: "aaaaaaa1-full", cwd: repo, workspaceId: ONE });
 
   assert.deepEqual(listTabs(home, "wks_9999999zzzzzzz", NOW), []);
+});
+
+test("listTabs gives each tab its About line and status", (t) => {
+  const { home, repo } = setup(t);
+  writeAgent(home, { id: "aaaaaaa1-full", cwd: repo, workspaceId: ONE });
+  writeFileSync(
+    join(repo, "TABS.md"),
+    "## 1. A title · aaaaaaa\n\n### About this tab\nFixing the login loop after a reset.\n\nLast updated 2026-10-24 12:00\n\n" +
+      "**Waiting on you**\n- Nothing open.\n\n**Claude's next steps**\n- b) [ ] add a test\n",
+  );
+
+  const [row] = listTabs(home, ONE, NOW);
+
+  assert.equal(row.about, "Fixing the login loop after a reset.");
+  assert.equal(row.status, "next");
+});
+
+test("listTabs shortens long names unless told not to", (t) => {
+  const { home, repo } = setup(t);
+  const long = "I need to re-add assetdev to my phone's paseo since we moved";
+  writeAgent(home, { id: "aaaaaaa1-full", cwd: repo, workspaceId: ONE, title: long });
+
+  assert.equal(listTabs(home, ONE, NOW)[0].title, "Re-add assetdev to my phone's paseo…");
+  assert.equal(listTabs(home, ONE, NOW, { ...DEFAULT_DISPLAY, shortenNames: false })[0].title, long);
 });

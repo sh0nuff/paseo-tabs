@@ -9,7 +9,7 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import type { PaseoState } from "./paseo-state.ts";
-import { planFolder, renderFolder } from "./tabs-file.ts";
+import { DEFAULT_DISPLAY, type DisplayOptions, planFolder, renderFolder } from "./tabs-file.ts";
 
 export interface FileIO {
   read(path: string): string | null;
@@ -72,6 +72,7 @@ export function syncFolder(
   state: PaseoState,
   now: Date,
   io: FileIO = fileIO,
+  display: DisplayOptions = DEFAULT_DISPLAY,
 ): "created" | "updated" | "unchanged" | "skipped" | "busy" {
   if (!isGitTopLevel(cwd)) return "skipped";
   const agents = state.agents.filter((agent) => agent.cwd === cwd);
@@ -84,7 +85,7 @@ export function syncFolder(
   }
 
   for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
-    const next = renderFolder(planFolder(current ?? "", agents, state.workspaces, now));
+    const next = renderFolder(planFolder(current ?? "", agents, state.workspaces, now, display));
     if (next === current) return "unchanged";
     // A tab may have written to the file while this pass was planning.
     // Write only if the file still holds the text the plan was made from.

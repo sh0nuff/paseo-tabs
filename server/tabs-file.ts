@@ -95,6 +95,18 @@ export function hasOpenItems(body: string): boolean {
   return body.split("\n").some(isOpenItem);
 }
 
+/** The first line under a section's "### About this tab", or "". */
+export function aboutLine(body: string): string {
+  const lines = body.split("\n");
+  const start = lines.findIndex((line) => line.trim() === "### About this tab");
+  if (start === -1) return "";
+  for (const line of lines.slice(start + 1)) {
+    if (line.startsWith("#") || LABEL.test(line) || line.startsWith("Last updated")) return "";
+    if (line.trim()) return line.trim();
+  }
+  return "";
+}
+
 /** Where a tab stands, from its own section. */
 export function tabStatus(body: string): TabStatus {
   if (!SECTION_LABELS.test(body)) return null;

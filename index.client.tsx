@@ -1,4 +1,5 @@
 import type { PluginClientContext } from "@getpaseo/plugin/client";
+import { SettingsScreen } from "./client/settings-screen.tsx";
 import { TabsPanel } from "./client/tabs-panel.tsx";
 
 export default function contribute(client: PluginClientContext) {
@@ -17,6 +18,12 @@ export default function contribute(client: PluginClientContext) {
     onSelect({ openPanel }) {
       openPanel("tabs");
     },
+  });
+  client.addSettingsScreen({
+    id: "display",
+    title: "Tabs",
+    icon: "ListChecks",
+    Component: SettingsScreen,
   });
   return () => {};
 }
