@@ -1,7 +1,11 @@
 {
   "id": "paseo-tabs",
   "name": "Tabs",
-  "media": [],
+  "media": [
+    "assets/panel.png",
+    "assets/tabs-md.png",
+    "assets/palettes.png"
+  ],
   "requirements": {
     "paseo": ">=0.11.0"
   }

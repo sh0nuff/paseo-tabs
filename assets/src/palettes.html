@@ -1,0 +1,24 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="style.css">
+<style>
+.grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; padding: 18px; }
+.name { font-size: 14px; color: var(--muted); margin: 0 0 8px 2px; }
+.mini { display: flex; flex-direction: column; gap: 6px; }
+.mini .row { padding: 8px 10px; }
+.mini .title { font-size: 14px; }
+</style></head><body>
+<div class="grid" id="grid"></div>
+<script>
+const palettes = [
+  ["Standard", ["#EF4444", "#F97316", "#3B82F6", "#22C55E"]],
+  ["Catppuccin", ["#f38ba8", "#fab387", "#89b4fa", "#a6e3a1"]],
+  ["Gruvbox", ["#fb4934", "#fe8019", "#83a598", "#b8bb26"]],
+  ["Nord", ["#bf616a", "#d08770", "#81a1c1", "#a3be8c"]],
+];
+const rows = [["Overdue", true], ["Waiting on you", true], ["Next steps", false], ["Nothing open", false]];
+document.getElementById("grid").innerHTML = palettes.map(([name, colours]) =>
+  `<div><div class="name">${name}</div><div class="mini">` +
+  rows.map(([label, bold], i) =>
+    `<div class="row" style="border-left-color:${colours[i]}"><div class="line"><span class="dot" style="background:${colours[i]}"></span><span class="title${bold ? " bold" : ""}">${label}</span></div></div>`
+  ).join("") + `</div></div>`).join("");
+</script>
+</body></html>
