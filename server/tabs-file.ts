@@ -2,8 +2,9 @@
 //
 // A tab's heading is "## <dot> <n>. <title> · <first 7 characters of its agent
 // id>", with " · closed" once the tab is archived. The dot shows where the tab
-// stands: orange when something waits on the user, blue when only Claude has
-// next steps, a tick when nothing is open, and none for a new or closed tab. n is the tab's place in its
+// stands: red when an item has waited on the user past their limit, orange when
+// something waits on them, blue when only Claude has next steps, a tick when
+// nothing is open, and none for a new or closed tab. n is the tab's place in its
 // workspace's tab bar, in the order the tabs were opened, and closed tabs carry
 // on after the open ones. When a file holds tabs from more than one workspace,
 // each workspace's sections sit under "# <workspace title> · <7 characters of
@@ -18,14 +19,14 @@ import type { AgentRecord, WorkspaceRecord } from "./paseo-state.ts";
 
 export const PLACEHOLDER = "No items yet. This tab hasn't written to this file.";
 
-const TAB_HEADING = /^## (?:(?:🟠|🔵|✅) )?(?:\d+\. )?(.*?) · ([0-9A-Za-z]{7})( · closed)?[ \t]*$/u;
+const TAB_HEADING = /^## (?:(?:🔴|🟠|🔵|✅) )?(?:\d+\. )?(.*?) · ([0-9A-Za-z]{7})( · closed)?[ \t]*$/u;
 const GROUP_LINE = /^# (.*?) · ([0-9A-Za-z]{7})( · archived)?[ \t]*$/;
 const BULLET = /^\s*[-*+] /;
 const DONE_ITEM = /^\s*[-*+] (?:[a-z]+\) )?\[x\] /;
 const NOTHING_ITEM = /^\s*[-*+] Nothing/;
 const LABEL = /^\*\*.+\*\*\s*$/;
 const SECTION_LABELS = /^\*\*(?:Waiting on you|Claude's next steps|Done)\*\*\s*$/m;
-const DOTS = { waiting: "🟠", next: "🔵", done: "✅" } as const;
+const DOTS = { overdue: "🔴", waiting: "🟠", next: "🔵", done: "✅" } as const;
 const KEEP_CLOSED_MS = 24 * 3600 * 1000;
 const NO_WORKSPACE_SHORT = "0000000";
 
@@ -34,12 +35,19 @@ export interface DisplayOptions {
   statusDots: boolean;
   shortenNames: boolean;
   maxNameLength: number;
+  /** Days an item may wait on the user unchanged before its tab turns red. 0 means never. */
+  overdueAfterDays: number;
 }
 
-export const DEFAULT_DISPLAY: DisplayOptions = { statusDots: true, shortenNames: true, maxNameLength: 40 };
+export const DEFAULT_DISPLAY: DisplayOptions = {
+  statusDots: true,
+  shortenNames: true,
+  maxNameLength: 40,
+  overdueAfterDays: 7,
+};
 
 /** null for a section with none of the usual labels yet, such as a new tab's placeholder. */
-export type TabStatus = "waiting" | "next" | "done" | null;
+export type TabStatus = "overdue" | "waiting" | "next" | "done" | null;
 
 export interface TabEntry {
   agent: AgentRecord;
@@ -49,6 +57,8 @@ export interface TabEntry {
   number: number;
   closed: boolean;
   status: TabStatus;
+  /** Items waiting on the user past the limit, from the clock passed to planFolder. */
+  overdue: number;
   body: string;
 }
 
@@ -114,9 +124,10 @@ export function aboutLine(body: string): string {
   return "";
 }
 
-/** Where a tab stands, from its own section. */
-export function tabStatus(body: string): TabStatus {
+/** Where a tab stands, from its own section and how many of its items are overdue. */
+export function tabStatus(body: string, overdue = 0): TabStatus {
   if (!SECTION_LABELS.test(body)) return null;
+  if (overdue > 0) return "overdue";
   if (countOpen(body, "Waiting on you") > 0) return "waiting";
   if (countOpen(body, "Claude's next steps") > 0) return "next";
   // A tick must never sit over an unticked box, wherever in the section it is.
@@ -178,6 +189,7 @@ export function planFolder(
   workspaces: WorkspaceRecord[],
   now: Date,
   options: DisplayOptions = DEFAULT_DISPLAY,
+  overdueOf?: (short: string, body: string) => number,
 ): FolderPlan {
   const display = (name: string) => (options.shortenNames ? shortenName(name, options.maxNameLength) : oneLine(name));
   const { preamble, sections } = splitSections(text);
@@ -212,7 +224,8 @@ export function planFolder(
     const key = agent.workspaceId;
     if (!entries.has(key)) entries.set(key, { open: [], closed: [] });
     const title = resolveTitle(agent, headingTitles.get(short), display);
-    const entry: TabEntry = { agent, short, title, number: 0, closed, status: tabStatus(text), body: text };
+    const overdue = overdueOf && body !== undefined ? overdueOf(short, body) : 0;
+    const entry: TabEntry = { agent, short, title, number: 0, closed, status: tabStatus(text, overdue), overdue, body: text };
     entries.get(key)![closed ? "closed" : "open"].push(entry);
   }
 

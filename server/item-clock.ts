@@ -5,12 +5,19 @@
 // it off or removing it forgets it.
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 import { isOpenItem } from "./tabs-file.ts";
 
 const DAY_MS = 24 * 3600 * 1000;
 const LABEL = /^\*\*.+\*\*\s*$/;
 const BOXED_ITEM = /^\s*[-*+]\s+(?:([a-z]+)\)\s+)?\[ \]\s+(.*)$/;
+
+/** Where the plugin keeps item ages: $XDG_STATE_HOME/paseo-tabs, else ~/.local/state/paseo-tabs. */
+export function clockPath(env: Record<string, string | undefined> = process.env): string {
+  const state = env.XDG_STATE_HOME || join(env.HOME ?? homedir(), ".local", "state");
+  return join(state, "paseo-tabs", "items.json");
+}
 
 export interface WaitingItem {
   key: string;

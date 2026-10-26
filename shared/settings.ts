@@ -10,6 +10,8 @@ export const displaySettings = defineSettings({
     statusDots: z.boolean().default(true),
     shortenNames: z.boolean().default(true),
     maxNameLength: z.number().int().min(20).max(80).default(40),
+    overdueAfterDays: z.number().int().min(0).max(365).default(7),
+    palette: z.enum(["default", "catppuccin", "gruvbox", "nord"]).default("default"),
   }),
 });
 

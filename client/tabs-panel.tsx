@@ -3,16 +3,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { displaySettings } from "../shared/settings.ts";
+import { statusColours } from "./palettes.ts";
 import { type TabRow, tabsList } from "../shared/tabs-rpc.ts";
 
-// Drawn, not emoji: emoji colours depend on the fonts each machine has, and a
-// desktop without a colour emoji font shows them in black and white.
-const STATUS_COLOURS = { waiting: "#F97316", next: "#3B82F6", done: "#22C55E" } as const;
 
 function summary(tab: TabRow): string {
   if (tab.status === null) return "No checklist yet";
   const parts = [];
-  if (tab.waiting > 0) parts.push(`${tab.waiting} waiting on you`);
+  if (tab.waiting > 0) parts.push(`${tab.waiting} waiting on you${tab.overdue > 0 ? ` (${tab.overdue} overdue)` : ""}`);
   if (tab.next > 0) parts.push(`${tab.next} next`);
   return parts.length > 0 ? parts.join(" · ") : "Nothing open";
 }
@@ -21,6 +19,9 @@ export function TabsPanel({ theme, layout, workspaceId, navigation }: PluginWork
   const fetchTabs = useRpc(tabsList);
   const settings = useSettings(displaySettings);
   const dots = settings.status === "ready" ? settings.values.statusDots : true;
+  const palette = settings.status === "ready" ? settings.values.palette : "default";
+  // Drawn, not emoji: emoji colours depend on the fonts each machine has.
+  const colours = useMemo(() => statusColours(palette, theme.colors.surface0), [palette, theme]);
   const query = useQuery({
     queryKey: ["paseo-tabs", workspaceId],
     queryFn: () => fetchTabs({ workspaceId }),
@@ -64,8 +65,8 @@ export function TabsPanel({ theme, layout, workspaceId, navigation }: PluginWork
   const closed = tabs.filter((tab) => tab.closed);
 
   const row = (tab: TabRow) => {
-    const waiting = !tab.closed && tab.status === "waiting";
-    const colour = dots && !tab.closed && tab.status ? STATUS_COLOURS[tab.status] : null;
+    const waiting = !tab.closed && (tab.status === "waiting" || tab.status === "overdue");
+    const colour = dots && !tab.closed && tab.status ? colours[tab.status] : null;
     const rowStyle = [
       styles.row,
       colour ? { borderLeftColor: colour } : null,

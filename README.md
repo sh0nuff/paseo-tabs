@@ -68,7 +68,8 @@ The Paseo plugin reads Paseo's agent and workspace records every 2 seconds, and 
 
 - It creates `TABS.md` only at the top level of a git repository that has an open Claude tab. Whenever it writes the file, it makes sure `TABS.md` is in that repository's `.git/info/exclude`, so the file is never committed, even one a tab created by hand. In a worktree, the line goes in the main repository's exclude file.
 - Tabs are numbered in the order they were opened, matching the tab bar. Headings follow renames.
-- Each open tab's heading starts with a dot: 🟠 when something in its section waits on you, 🔵 when only its next steps are open, ✅ when nothing is open. A new tab and closed tabs get none.
+- Each open tab's heading starts with a dot: 🔴 when an item has waited on you, unchanged, longer than your limit, 🟠 when something in its section waits on you, 🔵 when only its next steps are open, ✅ when nothing is open. A new tab and closed tabs get none.
+- To know how long an item has waited, the plugin notes when each item under "Waiting on you" last changed, in its own file at `$XDG_STATE_HOME/paseo-tabs/items.json` (`~/.local/state/paseo-tabs/items.json` when that variable is unset). TABS.md itself never gets dates. Rewording an item restarts its clock, and ticking it off or removing it forgets it. Items that were already open when the plugin was installed start counting from then.
 - Long names, usually Paseo's copy of a first message, are shortened for display: stray quotes and openers go, the first clause stays, and an ellipsis marks a cut. The names in Paseo stay as they are.
 - When a folder has tabs from more than one Paseo workspace, each workspace's tabs sit under a `# <workspace name> · <short id>` line, numbered on their own.
 - A closed tab's section moves to the bottom of its workspace, marked ` · closed`. It stays while anything in it is open, and goes once nothing is and the tab has been closed for 24 hours. Any unticked box counts as open, at any indent. A list line starting with "- Nothing" doesn't.
@@ -77,7 +78,7 @@ The Paseo plugin reads Paseo's agent and workspace records every 2 seconds, and 
 
 ### The Tabs panel
 
-Open it with Ctrl+K (⌘K on macOS) and "Open Tabs". It lists the workspace's tabs in tab-bar order, each with its dot, its "About this tab" line, and how many items are waiting on you and next. Tabs waiting on you are bold, with a coloured edge. Tapping a tab opens it. Closed tabs that still have a section are listed below, dimmed.
+Open it with Ctrl+K (⌘K on macOS) and "Open Tabs". It lists the workspace's tabs in tab-bar order, each with its dot, its "About this tab" line, and how many items are waiting on you, overdue and next. Tabs waiting on you are bold, and each row's edge takes its dot's colour. The panel draws its dots, so they show in colour on any machine; TABS.md's dots are emoji, which need a colour emoji font. Tapping a tab opens it. Closed tabs that still have a section are listed below, dimmed.
 
 ### Settings
 
@@ -86,6 +87,8 @@ Under Settings, Plugins, Tabs:
 - **Status dots**: the dots in TABS.md and the panel. On by default.
 - **Shorten long names**: the shortened display names. On by default.
 - **Longest name**: how many characters a shortened name keeps, from 25 to 80. 40 by default.
+- **Overdue after**: how long an item may wait on you, unchanged, before its tab turns red: 3 days, 1 week, 2 weeks, 30 days, or never. 1 week by default.
+- **Palette**: the panel's colours: Standard, Catppuccin, Gruvbox or Nord, each in a dark or light version to match your Paseo theme.
 
 Every `TABS.md` is rewritten as soon as a setting changes.
 

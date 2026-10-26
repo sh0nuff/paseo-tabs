@@ -9,7 +9,8 @@ export const tabRow = z.object({
   closed: z.boolean(),
   waiting: z.number(),
   next: z.number(),
-  status: z.enum(["waiting", "next", "done"]).nullable(),
+  overdue: z.number(),
+  status: z.enum(["overdue", "waiting", "next", "done"]).nullable(),
   about: z.string(),
 });
 

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { listTabs } from "../server/tabs-list.ts";
+import { ItemClock } from "../server/item-clock.ts";
 import { DEFAULT_DISPLAY } from "../server/tabs-file.ts";
 import { NOW, gitInit, makeHome, tempDir, writeAgent, writeWorkspaces } from "./helpers.ts";
 
@@ -32,8 +33,8 @@ test("listTabs returns this workspace's tabs with open-item counts", (t) => {
   );
 
   assert.deepEqual(listTabs(home, ONE, NOW), [
-    { agentId: "aaaaaaa1-full", short: "aaaaaaa", number: 1, title: "A title", closed: false, waiting: 1, next: 2, status: "waiting", about: "" },
-    { agentId: "bbbbbbb2-full", short: "bbbbbbb", number: 2, title: "B title", closed: false, waiting: 0, next: 0, status: null, about: "" },
+    { agentId: "aaaaaaa1-full", short: "aaaaaaa", number: 1, title: "A title", closed: false, waiting: 1, next: 2, overdue: 0, status: "waiting", about: "" },
+    { agentId: "bbbbbbb2-full", short: "bbbbbbb", number: 2, title: "B title", closed: false, waiting: 0, next: 0, overdue: 0, status: null, about: "" },
   ]);
 });
 
@@ -43,7 +44,7 @@ test("listTabs works without a TABS.md, with zero counts", (t) => {
   writeAgent(home, { id: "bbbbbbb2-full", cwd: repo, workspaceId: ONE, archivedAt: "2026-10-24T11:00:00.000Z" });
 
   assert.deepEqual(listTabs(home, ONE, NOW), [
-    { agentId: "aaaaaaa1-full", short: "aaaaaaa", number: 1, title: "A title", closed: false, waiting: 0, next: 0, status: null, about: "" },
+    { agentId: "aaaaaaa1-full", short: "aaaaaaa", number: 1, title: "A title", closed: false, waiting: 0, next: 0, overdue: 0, status: null, about: "" },
   ]);
 });
 
@@ -99,4 +100,17 @@ test("listTabs shortens long names unless told not to", (t) => {
 
   assert.equal(listTabs(home, ONE, NOW)[0].title, "Re-add the laptop to my phone's app…");
   assert.equal(listTabs(home, ONE, NOW, { ...DEFAULT_DISPLAY, shortenNames: false })[0].title, long);
+});
+
+test("listTabs counts overdue items with the clock it is given", (t) => {
+  const { home, repo } = setup(t);
+  writeAgent(home, { id: "aaaaaaa1-full", cwd: repo, workspaceId: ONE });
+  writeFileSync(join(repo, "TABS.md"), "## 1. A title · aaaaaaa\n\n**Waiting on you**\n- a) [ ] answer\n");
+  const clock = new ItemClock(null);
+  listTabs(home, ONE, NOW, DEFAULT_DISPLAY, clock);
+
+  const [row] = listTabs(home, ONE, new Date(NOW.getTime() + 8 * 24 * 3600 * 1000), DEFAULT_DISPLAY, clock);
+
+  assert.equal(row.overdue, 1);
+  assert.equal(row.status, "overdue");
 });

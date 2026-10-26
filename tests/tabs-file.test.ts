@@ -257,6 +257,25 @@ test("aboutLine drops a leading bullet", () => {
   assert.equal(aboutLine("\n### About this tab\n- Fixing the login loop.\n"), "Fixing the login loop.");
 });
 
+test("marks a tab with an overdue item with a red dot", () => {
+  const out = renderFolder(
+    planFolder(`## 1. A title · aaaaaaa\n${WAITING}`, [agent("aaaaaaa1")], [ONE], NOW, DEFAULT_DISPLAY, () => 1),
+  );
+  assert.equal(out, `## 🔴 1. A title · aaaaaaa\n${WAITING}`);
+});
+
+test("reads a red heading back, and asks about each tab with a section", () => {
+  const asked: string[] = [];
+  const out = renderFolder(
+    planFolder(`## 🔴 1. A title · aaaaaaa\n${WAITING}`, [agent("aaaaaaa1")], [ONE], NOW, DEFAULT_DISPLAY, (short) => {
+      asked.push(short);
+      return 0;
+    }),
+  );
+  assert.equal(out, `## 🟠 1. A title · aaaaaaa\n${WAITING}`);
+  assert.deepEqual(asked, ["aaaaaaa"]);
+});
+
 test("keeps unknown sections below the tabs", () => {
   const out = sync("## Notes\n\nfree text\n\n## 1. A title · aaaaaaa\n\nbody\n", [agent("aaaaaaa1")]);
   assert.equal(out, "## 1. A title · aaaaaaa\n\nbody\n\n## Notes\n\nfree text\n");

@@ -3,6 +3,7 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import type { ItemClock } from "./item-clock.ts";
 import { loadState } from "./paseo-state.ts";
 import { DEFAULT_DISPLAY, type DisplayOptions, type TabStatus, aboutLine, countOpen, planFolder } from "./tabs-file.ts";
 
@@ -14,6 +15,7 @@ export interface TabRow {
   closed: boolean;
   waiting: number;
   next: number;
+  overdue: number;
   status: TabStatus;
   about: string;
 }
@@ -31,6 +33,7 @@ export function listTabs(
   workspaceId: string,
   now: Date = new Date(),
   display: DisplayOptions = DEFAULT_DISPLAY,
+  clock?: ItemClock,
 ): TabRow[] {
   const state = loadState(home);
   const cwd =
@@ -39,7 +42,10 @@ export function listTabs(
   if (!cwd) return [];
 
   const agents = state.agents.filter((agent) => agent.cwd === cwd);
-  const plan = planFolder(readText(join(cwd, "TABS.md")), agents, state.workspaces, now, display);
+  const overdueOf = clock
+    ? (short: string, body: string) => clock.observe(short, body, now, display.overdueAfterDays)
+    : undefined;
+  const plan = planFolder(readText(join(cwd, "TABS.md")), agents, state.workspaces, now, display, overdueOf);
   const group = plan.groups.find((candidate) => candidate.id === workspaceId);
   if (!group) return [];
 
@@ -51,6 +57,7 @@ export function listTabs(
     closed: tab.closed,
     waiting: countOpen(tab.body, "Waiting on you"),
     next: countOpen(tab.body, "Claude's next steps"),
+    overdue: tab.overdue,
     status: tab.status,
     about: aboutLine(tab.body),
   }));

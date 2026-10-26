@@ -41,7 +41,9 @@ test("the plugin entry applies saved settings and serves tabs.list", async (t) =
   writeAgent(home, { id: "aaaaaaa1-full", cwd: repo });
   writeFileSync(join(repo, "TABS.md"), "## 1. A title · aaaaaaa\n\n**Waiting on you**\n- a) [ ] answer\n");
   const previousHome = process.env.PASEO_HOME;
+  const previousState = process.env.XDG_STATE_HOME;
   process.env.PASEO_HOME = home;
+  process.env.XDG_STATE_HOME = join(root, "state");
   const { server, handlers, emit } = fakeServer();
 
   const cleanup = contribute(server as never);
@@ -49,6 +51,8 @@ test("the plugin entry applies saved settings and serves tabs.list", async (t) =
     await cleanup?.();
     if (previousHome === undefined) delete process.env.PASEO_HOME;
     else process.env.PASEO_HOME = previousHome;
+    if (previousState === undefined) delete process.env.XDG_STATE_HOME;
+    else process.env.XDG_STATE_HOME = previousState;
   });
   await sleep(20);
   assert.match(readFileSync(join(repo, "TABS.md"), "utf8"), /^## 🟠 1\. A title · aaaaaaa$/m);
@@ -69,7 +73,9 @@ test("the first write uses the saved settings, not the defaults", async (t) => {
   const text = "## 1. A title · aaaaaaa\n\n**Waiting on you**\n- a) [ ] answer\n";
   writeFileSync(join(repo, "TABS.md"), text);
   const previousHome = process.env.PASEO_HOME;
+  const previousState = process.env.XDG_STATE_HOME;
   process.env.PASEO_HOME = home;
+  process.env.XDG_STATE_HOME = join(root, "state");
   const { server } = fakeServer({ status: "ready", revision: "1", values: { statusDots: false, shortenNames: true, maxNameLength: 40 } });
 
   const cleanup = contribute(server as never);
@@ -77,9 +83,36 @@ test("the first write uses the saved settings, not the defaults", async (t) => {
     await cleanup?.();
     if (previousHome === undefined) delete process.env.PASEO_HOME;
     else process.env.PASEO_HOME = previousHome;
+    if (previousState === undefined) delete process.env.XDG_STATE_HOME;
+    else process.env.XDG_STATE_HOME = previousState;
   });
 
   assert.equal(readFileSync(join(repo, "TABS.md"), "utf8"), text);
   await sleep(20);
   assert.equal(readFileSync(join(repo, "TABS.md"), "utf8"), text);
+});
+
+test("the plugin entry keeps its clock under XDG_STATE_HOME", async (t) => {
+  const root = tempDir(t);
+  const home = makeHome(root);
+  const repo = gitInit(join(root, "repo"));
+  writeAgent(home, { id: "aaaaaaa1-full", cwd: repo });
+  writeFileSync(join(repo, "TABS.md"), "## 1. A title · aaaaaaa\n\n**Waiting on you**\n- a) [ ] answer\n");
+  const previousHome = process.env.PASEO_HOME;
+  const previousState = process.env.XDG_STATE_HOME;
+  process.env.PASEO_HOME = home;
+  process.env.XDG_STATE_HOME = join(root, "state");
+  const { server } = fakeServer();
+
+  const cleanup = contribute(server as never);
+  t.after(async () => {
+    await cleanup?.();
+    if (previousHome === undefined) delete process.env.PASEO_HOME;
+    else process.env.PASEO_HOME = previousHome;
+    if (previousState === undefined) delete process.env.XDG_STATE_HOME;
+    else process.env.XDG_STATE_HOME = previousState;
+  });
+  await sleep(20);
+
+  assert.match(readFileSync(join(root, "state", "paseo-tabs", "items.json"), "utf8"), /"aaaaaaa:a"/);
 });

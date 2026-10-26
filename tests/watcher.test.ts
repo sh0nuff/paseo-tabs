@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { DEFAULT_DISPLAY } from "../server/tabs-file.ts";
 import { startWatcher, syncAll } from "../server/watcher.ts";
+import { ItemClock } from "../server/item-clock.ts";
 import { NOW, gitInit, makeHome, tempDir, writeAgent } from "./helpers.ts";
 
 test("syncAll syncs every folder that has agents", (t) => {
@@ -81,4 +82,20 @@ test("re-syncs when a tab edits TABS.md, with no change to Paseo's records", asy
   await sleep(300);
 
   assert.match(readFileSync(join(repo, "TABS.md"), "utf8"), /^## 🟠 1\. A title · aaaaaaa$/m);
+});
+
+test("syncAll turns a tab red once its waiting item sits past the limit", (t) => {
+  const root = tempDir(t);
+  const home = makeHome(root);
+  const repo = gitInit(join(root, "repo"));
+  writeAgent(home, { id: "aaaaaaa1", cwd: repo });
+  writeFileSync(join(repo, "TABS.md"), "## 1. A title · aaaaaaa\n\n**Waiting on you**\n- a) [ ] answer\n");
+  const clockPath = join(root, "state", "items.json");
+  const day = 24 * 3600 * 1000;
+
+  syncAll(home, NOW, DEFAULT_DISPLAY, new ItemClock(clockPath));
+  assert.match(readFileSync(join(repo, "TABS.md"), "utf8"), /^## 🟠 1\. A title · aaaaaaa$/m);
+
+  syncAll(home, new Date(NOW.getTime() + 8 * day), DEFAULT_DISPLAY, new ItemClock(clockPath));
+  assert.match(readFileSync(join(repo, "TABS.md"), "utf8"), /^## 🔴 1\. A title · aaaaaaa$/m);
 });
