@@ -92,7 +92,7 @@ function resolveTitle(
 
 // This guards the one path that removes text, so it leans towards "open": any
 // unticked box counts, at any indent, as does any list line that isn't ticked.
-function isOpenItem(line: string): boolean {
+export function isOpenItem(line: string): boolean {
   if (line.includes("[ ]")) return true;
   return BULLET.test(line) && !DONE_ITEM.test(line) && !NOTHING_ITEM.test(line);
 }
