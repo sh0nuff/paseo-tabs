@@ -5,7 +5,9 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { displaySettings } from "../shared/settings.ts";
 import { type TabRow, tabsList } from "../shared/tabs-rpc.ts";
 
-const DOTS = { waiting: "🟠", next: "🔵", done: "✅" } as const;
+// Drawn, not emoji: emoji colours depend on the fonts each machine has, and a
+// desktop without a colour emoji font shows them in black and white.
+const STATUS_COLOURS = { waiting: "#F97316", next: "#3B82F6", done: "#22C55E" } as const;
 
 function summary(tab: TabRow): string {
   if (tab.status === null) return "No checklist yet";
@@ -40,9 +42,11 @@ export function TabsPanel({ theme, layout, workspaceId, navigation }: PluginWork
         backgroundColor: theme.colors.surface1,
         gap: 3,
       },
-      waitingRow: { borderLeftColor: theme.colors.accent },
+
       closedRow: { opacity: 0.55 },
-      title: { color: theme.colors.foreground, fontSize: layout.compact ? 15 : 16 },
+      titleLine: { flexDirection: "row" as const, alignItems: "center" as const, gap: 8 },
+      dot: { width: 10, height: 10, borderRadius: 5 },
+      title: { color: theme.colors.foreground, fontSize: layout.compact ? 15 : 16, flexShrink: 1 },
       bold: { fontWeight: "700" as const },
       about: { color: theme.colors.foregroundMuted, fontSize: 13 },
       detail: { color: theme.colors.foregroundMuted, fontSize: 12 },
@@ -61,13 +65,20 @@ export function TabsPanel({ theme, layout, workspaceId, navigation }: PluginWork
 
   const row = (tab: TabRow) => {
     const waiting = !tab.closed && tab.status === "waiting";
-    const dot = dots && !tab.closed && tab.status ? `${DOTS[tab.status]} ` : "";
-    const rowStyle = [styles.row, waiting ? styles.waitingRow : null, tab.closed ? styles.closedRow : null];
+    const colour = dots && !tab.closed && tab.status ? STATUS_COLOURS[tab.status] : null;
+    const rowStyle = [
+      styles.row,
+      colour ? { borderLeftColor: colour } : null,
+      tab.closed ? styles.closedRow : null,
+    ];
     const body = (
       <>
-        <Text style={[styles.title, waiting ? styles.bold : null]} numberOfLines={1}>
-          {`${dot}${tab.number}. ${tab.title}`}
-        </Text>
+        <View style={styles.titleLine}>
+          {colour ? <View style={[styles.dot, { backgroundColor: colour }]} /> : null}
+          <Text style={[styles.title, waiting ? styles.bold : null]} numberOfLines={1}>
+            {`${tab.number}. ${tab.title}`}
+          </Text>
+        </View>
         {tab.about ? (
           <Text style={styles.about} numberOfLines={2}>
             {tab.about}
