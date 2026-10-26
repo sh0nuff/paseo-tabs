@@ -99,3 +99,33 @@ test("syncAll turns a tab red once its waiting item sits past the limit", (t) =>
   syncAll(home, new Date(NOW.getTime() + 8 * day), DEFAULT_DISPLAY, new ItemClock(clockPath));
   assert.match(readFileSync(join(repo, "TABS.md"), "utf8"), /^## 🔴 1\. A title · aaaaaaa$/m);
 });
+
+test("a tab turns red when its item crosses the limit, with nothing else changing", async (t) => {
+  const root = tempDir(t);
+  const home = makeHome(root);
+  const repo = gitInit(join(root, "repo"));
+  writeAgent(home, { id: "aaaaaaa1", cwd: repo });
+  writeFileSync(join(repo, "TABS.md"), "## 1. A title · aaaaaaa\n\n**Waiting on you**\n- a) [ ] answer\n");
+  const clockPath = join(root, "state", "items.json");
+  mkdirSync(join(root, "state"), { recursive: true });
+  const since = new Date(Date.now() - 7 * 24 * 3600 * 1000 + 400).toISOString();
+  writeFileSync(clockPath, JSON.stringify({ version: 1, items: { "aaaaaaa:a": { text: "answer", since } } }));
+
+  const watcher = startWatcher(home, { intervalMs: 50, clock: new ItemClock(clockPath) });
+  t.after(watcher.stop);
+  assert.match(readFileSync(join(repo, "TABS.md"), "utf8"), /^## 🟠 1\. A title · aaaaaaa$/m);
+
+  await sleep(900);
+  assert.match(readFileSync(join(repo, "TABS.md"), "utf8"), /^## 🔴 1\. A title · aaaaaaa$/m);
+});
+
+test("an empty agent list leaves the clocks alone", (t) => {
+  const root = tempDir(t);
+  const home = makeHome(root);
+  const clock = new ItemClock(null);
+  clock.observe("aaaaaaa", "\n**Waiting on you**\n- a) [ ] answer\n", NOW, 7);
+
+  syncAll(home, NOW, DEFAULT_DISPLAY, clock);
+
+  assert.equal(clock.observe("aaaaaaa", "\n**Waiting on you**\n- a) [ ] answer\n", new Date(NOW.getTime() + 8 * 24 * 3600 * 1000), 7), 1);
+});

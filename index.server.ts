@@ -10,7 +10,7 @@ import { tabsList } from "./shared/tabs-rpc.ts";
 export default function contribute(server: PluginServerContext) {
   const home = paseoHome(process.env);
   let display: DisplayOptions = DEFAULT_DISPLAY;
-  const clock = new ItemClock(clockPath(process.env));
+  const clock = new ItemClock(clockPath(process.env, home));
   let watcher: Watcher | null = null;
   let stopped = false;
   // The first pass waits for the saved settings, so a file is never written

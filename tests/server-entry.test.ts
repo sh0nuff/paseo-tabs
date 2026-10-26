@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import contribute from "../index.server.ts";
@@ -11,7 +11,7 @@ type Listener = (state: unknown) => void;
 function fakeServer(initial?: unknown) {
   const listeners: Listener[] = [];
   const handlers = new Map<string, (input: unknown) => unknown>();
-  let stored: unknown = initial ?? { status: "ready", revision: "1", values: { statusDots: true, shortenNames: true, maxNameLength: 40 } };
+  let stored: unknown = initial ?? { status: "ready", revision: "1", values: { statusDots: true, shortenNames: true, maxNameLength: 40, overdueAfterDays: 7, palette: "default" } };
   const server = {
     registerSettings: () => ({
       read: async () => stored,
@@ -57,7 +57,7 @@ test("the plugin entry applies saved settings and serves tabs.list", async (t) =
   await sleep(20);
   assert.match(readFileSync(join(repo, "TABS.md"), "utf8"), /^## 🟠 1\. A title · aaaaaaa$/m);
 
-  emit({ status: "ready", revision: "2", values: { statusDots: false, shortenNames: true, maxNameLength: 40 } });
+  emit({ status: "ready", revision: "2", values: { statusDots: false, shortenNames: true, maxNameLength: 40, overdueAfterDays: 7, palette: "default" } });
   await sleep(20);
   assert.match(readFileSync(join(repo, "TABS.md"), "utf8"), /^## 1\. A title · aaaaaaa$/m);
 
@@ -76,7 +76,7 @@ test("the first write uses the saved settings, not the defaults", async (t) => {
   const previousState = process.env.XDG_STATE_HOME;
   process.env.PASEO_HOME = home;
   process.env.XDG_STATE_HOME = join(root, "state");
-  const { server } = fakeServer({ status: "ready", revision: "1", values: { statusDots: false, shortenNames: true, maxNameLength: 40 } });
+  const { server } = fakeServer({ status: "ready", revision: "1", values: { statusDots: false, shortenNames: true, maxNameLength: 40, overdueAfterDays: 7, palette: "default" } });
 
   const cleanup = contribute(server as never);
   t.after(async () => {
@@ -114,5 +114,8 @@ test("the plugin entry keeps its clock under XDG_STATE_HOME", async (t) => {
   });
   await sleep(20);
 
-  assert.match(readFileSync(join(root, "state", "paseo-tabs", "items.json"), "utf8"), /"aaaaaaa:a"/);
+  const files = readdirSync(join(root, "state", "paseo-tabs"));
+  assert.equal(files.length, 1);
+  assert.match(files[0], /^items-[0-9a-f]{8}\.json$/);
+  assert.match(readFileSync(join(root, "state", "paseo-tabs", files[0]), "utf8"), /"aaaaaaa:a"/);
 });

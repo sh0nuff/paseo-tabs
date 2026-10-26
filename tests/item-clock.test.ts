@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { ItemClock, waitingItems } from "../server/item-clock.ts";
+import { ItemClock, clockPath, waitingItems } from "../server/item-clock.ts";
 import { tempDir } from "./helpers.ts";
 
 const DAY = 24 * 3600 * 1000;
@@ -79,4 +79,43 @@ test("an unreadable file starts an empty clock", (t) => {
   const path = join(tempDir(t), "items.json");
   const clock = new ItemClock(path);
   assert.equal(clock.observe("aaaaaaa", body("- a) [ ] Pick a name"), T0, 7), 0);
+});
+
+test("two items sharing a letter keep separate clocks", () => {
+  const clock = new ItemClock(null);
+  clock.observe("aaaaaaa", body("- a) [ ] One thing", "- a) [ ] Another thing"), T0, 7);
+  assert.equal(clock.observe("aaaaaaa", body("- a) [ ] One thing", "- a) [ ] Another thing"), later(8), 7), 2);
+});
+
+test("the clock file depends on the Paseo home, so two daemons keep apart", () => {
+  const env = { XDG_STATE_HOME: "/state", HOME: "/h" };
+  assert.notEqual(clockPath(env, "/one/.paseo"), clockPath(env, "/two/.paseo"));
+  assert.match(clockPath(env, "/one/.paseo"), /^\/state\/paseo-tabs\/items-[0-9a-f]{8}\.json$/);
+  assert.match(clockPath({ HOME: "/h" }, "/one/.paseo"), /^\/h\/\.local\/state\/paseo-tabs\//);
+});
+
+test("an entry that can't be read starts its item fresh", (t) => {
+  const path = join(tempDir(t), "items.json");
+  writeFileSync(path, JSON.stringify({ version: 1, items: { "aaaaaaa:a": { text: "Pick a name", since: "not a date" } } }));
+  const clock = new ItemClock(path);
+  assert.equal(clock.observe("aaaaaaa", body("- a) [ ] Pick a name"), T0, 7), 0);
+  assert.equal(clock.observe("aaaaaaa", body("- a) [ ] Pick a name"), later(8), 7), 1);
+});
+
+test("the clock file is private to the user", (t) => {
+  const path = join(tempDir(t), "state", "items.json");
+  const clock = new ItemClock(path);
+  clock.observe("aaaaaaa", body("- a) [ ] Pick a name"), T0, 7);
+  clock.save();
+  assert.equal(statSync(path).mode & 0o777, 0o600);
+});
+
+test("nextDue gives the earliest moment an item will turn overdue", () => {
+  const clock = new ItemClock(null);
+  clock.observe("aaaaaaa", body("- a) [ ] Pick a name"), T0, 7);
+  clock.observe("bbbbbbb", body("- a) [ ] Pick a name"), later(2), 7);
+  assert.equal(clock.nextDue(7, T0.getTime()), later(7).getTime());
+  assert.equal(clock.nextDue(7, later(8).getTime()), later(9).getTime());
+  assert.equal(clock.nextDue(7, later(20).getTime()), null);
+  assert.equal(clock.nextDue(0, T0.getTime()), null);
 });

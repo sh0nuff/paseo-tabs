@@ -1,7 +1,7 @@
 // The plugin's background loop. Paseo has no event for a renamed or brought-back
 // tab, so this checks Paseo's files every couple of seconds, along with each
-// TABS.md it keeps, and syncs every folder whenever any of them changed, or
-// when the display settings change.
+// TABS.md it keeps, and syncs every folder whenever any of them changed, when
+// the display settings change, or when a waiting item reaches the overdue limit.
 
 import { statSync } from "node:fs";
 import { join } from "node:path";
@@ -31,7 +31,8 @@ export function syncAll(
   }
   if (clock) {
     // Forget only tabs Paseo no longer has, so a folder skipped or busy this pass keeps its clocks.
-    clock.prune(new Set(state.agents.map((agent) => shortAgentId(agent.id))));
+    // An empty list more likely means Paseo's files could not be read than that every tab is gone.
+    if (state.agents.length > 0) clock.prune(new Set(state.agents.map((agent) => shortAgentId(agent.id))));
     try {
       clock.save();
     } catch (error) {
@@ -57,6 +58,7 @@ export function startWatcher(
 ): Watcher {
   let seen: string | null = null;
   let folders: string[] = [];
+  let due: number | null = null;
   // A tab editing its section changes TABS.md and nothing of Paseo's, so the
   // files themselves are part of what is watched. This pass's own write shows up
   // as one more change, whose pass then finds nothing to do.
@@ -75,9 +77,14 @@ export function startWatcher(
   const tick = (force = false) => {
     try {
       const current = fingerprint();
-      if (!force && current === seen) return;
+      // An item turning overdue changes no file, so its moment is watched as well.
+      const overdueNow = due !== null && Date.now() > due;
+      if (!force && !overdueNow && current === seen) return;
       seen = current;
-      folders = Object.keys(syncAll(home, new Date(), display(), clock));
+      const now = new Date();
+      const options = display();
+      folders = Object.keys(syncAll(home, now, options, clock));
+      due = clock?.nextDue(options.overdueAfterDays, now.getTime()) ?? null;
     } catch (error) {
       console.error("paseo-tabs: sync pass failed:", error);
     }

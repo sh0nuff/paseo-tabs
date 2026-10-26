@@ -4,19 +4,25 @@
 // known by its tab and its letter: rewording it restarts its clock, and ticking
 // it off or removing it forgets it.
 
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { isOpenItem } from "./tabs-file.ts";
 
 const DAY_MS = 24 * 3600 * 1000;
 const LABEL = /^\*\*.+\*\*\s*$/;
 const BOXED_ITEM = /^\s*[-*+]\s+(?:([a-z]+)\)\s+)?\[ \]\s+(.*)$/;
 
-/** Where the plugin keeps item ages: $XDG_STATE_HOME/paseo-tabs, else ~/.local/state/paseo-tabs. */
-export function clockPath(env: Record<string, string | undefined> = process.env): string {
+/**
+ * Where the plugin keeps item ages: $XDG_STATE_HOME/paseo-tabs, else
+ * ~/.local/state/paseo-tabs. Each Paseo home gets its own file, so two daemons
+ * run by one user never overwrite each other's clocks.
+ */
+export function clockPath(env: Record<string, string | undefined>, home: string): string {
   const state = env.XDG_STATE_HOME || join(env.HOME ?? homedir(), ".local", "state");
-  return join(state, "paseo-tabs", "items.json");
+  const id = createHash("sha1").update(resolve(home)).digest("hex").slice(0, 8);
+  return join(state, "paseo-tabs", `items-${id}.json`);
 }
 
 export interface WaitingItem {
@@ -27,6 +33,7 @@ export interface WaitingItem {
 /** Open items under a section's "Waiting on you", keyed by letter, or by text when unlettered. */
 export function waitingItems(body: string): WaitingItem[] {
   const items: WaitingItem[] = [];
+  const keys = new Set<string>();
   let inside = false;
   for (const line of body.split("\n")) {
     if (LABEL.test(line)) {
@@ -36,7 +43,11 @@ export function waitingItems(body: string): WaitingItem[] {
     if (!inside || !isOpenItem(line)) continue;
     const boxed = BOXED_ITEM.exec(line);
     const text = (boxed ? boxed[2] : line.trim().replace(/^[-*+]\s+/, "")).trim();
-    items.push({ key: boxed?.[1] ?? `#${text}`, text });
+    let key = boxed?.[1] ?? `#${text}`;
+    // A letter used twice, say after a hand edit, still gives each item its own clock.
+    if (boxed?.[1] && keys.has(key)) key = `${boxed[1]}#${text}`;
+    keys.add(key);
+    items.push({ key, text });
   }
   return items;
 }
@@ -47,12 +58,22 @@ interface Entry {
 }
 
 function readEntries(path: string): Record<string, Entry> {
+  let parsed: { items?: unknown } | null;
   try {
-    const parsed = JSON.parse(readFileSync(path, "utf8"));
-    return parsed && typeof parsed.items === "object" && parsed.items !== null ? parsed.items : {};
+    parsed = JSON.parse(readFileSync(path, "utf8"));
   } catch {
     return {}; // first run, or an unreadable file: every item starts fresh
   }
+  const entries: Record<string, Entry> = {};
+  const items = parsed?.items;
+  if (typeof items !== "object" || items === null) return entries;
+  for (const [key, entry] of Object.entries(items)) {
+    // An entry without its text or a readable date starts that item fresh.
+    if (typeof entry?.text === "string" && typeof entry.since === "string" && !Number.isNaN(Date.parse(entry.since))) {
+      entries[key] = { text: entry.text, since: entry.since };
+    }
+  }
+  return entries;
 }
 
 export class ItemClock {
@@ -101,10 +122,24 @@ export class ItemClock {
     }
   }
 
+  /** The earliest moment from nowMs at which an item turns overdue, or null if none will. */
+  nextDue(overdueAfterDays: number, nowMs: number): number | null {
+    if (overdueAfterDays <= 0) return null;
+    let next: number | null = null;
+    for (const entry of Object.values(this.entries)) {
+      const due = Date.parse(entry.since) + overdueAfterDays * DAY_MS;
+      if (due >= nowMs && (next === null || due < next)) next = due;
+    }
+    return next;
+  }
+
   save(): void {
     if (!this.path || !this.dirty) return;
     mkdirSync(dirname(this.path), { recursive: true });
-    writeFileSync(this.path, `${JSON.stringify({ version: 1, items: this.entries }, null, 2)}\n`);
+    // Written beside the file and renamed over it, so a crash never leaves half a file.
+    const scratch = `${this.path}.${process.pid}.tmp`;
+    writeFileSync(scratch, `${JSON.stringify({ version: 1, items: this.entries }, null, 2)}\n`, { mode: 0o600 });
+    renameSync(scratch, this.path);
     this.dirty = false;
   }
 }
