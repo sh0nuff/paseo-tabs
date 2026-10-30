@@ -1,7 +1,7 @@
 {
   "name": "paseo-tabs",
   "displayName": "Paseo Tabs",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Gives every Claude tab in Paseo the TABS.md rule, so each tab keeps its own section of the workspace's live checklist current.",
   "author": {
     "name": "sh0nuff"
