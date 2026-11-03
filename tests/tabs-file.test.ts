@@ -585,3 +585,24 @@ test("removes a finished item followed straight by another item, a label or a he
   const body = "- a) [x] ~~one~~\n1. a numbered note\n- b) [x] ~~two~~\n**Done**\n- c) [x] ~~three~~\n### Notes\n- d) [ ] last\n";
   assert.equal(withoutFinished(body, new Set(["a", "b", "c"])), "1. a numbered note\n**Done**\n### Notes\n- d) [ ] last\n");
 });
+
+test("keeps an item-shaped line inside a fenced code block", () => {
+  const body = ["", "**Claude's next steps**", "- c) [ ] Try the new format:", "", "```", "- b) [x] ~~example line~~", "", "```", ""].join("\n");
+  assert.equal(withoutFinished(body, new Set(["b"])), body);
+});
+
+test("keeps an item-shaped line inside an HTML comment", () => {
+  const body = ["", "**Claude's next steps**", "- c) [ ] Try the new format:", "", "<!--", "- b) [x] ~~example line~~", "", "-->", ""].join("\n");
+  assert.equal(withoutFinished(body, new Set(["b"])), body);
+});
+
+test("a fence closes only on the same kind of fence", () => {
+  const body = ["", "- c) [ ] next", "", "```", "~~~", "- b) [x] ~~still inside~~", "", "```", ""].join("\n");
+  assert.equal(withoutFinished(body, new Set(["b"])), body);
+});
+
+test("a letter inside a code block or a comment never counts as the section's highest", () => {
+  const lines = ["", "**Done**", "- a) [x] ~~first~~", "- b) [x] ~~second~~", "", "```", "- y) [ ] example", "```", "", "<!--", "- z) [ ] example", "-->", ""];
+  const expected = ["", "**Done**", "- b) [x] ~~second~~", "", "```", "- y) [ ] example", "```", "", "<!--", "- z) [ ] example", "-->", ""];
+  assert.equal(withoutFinished(lines.join("\n"), new Set(["a", "b"])), expected.join("\n"));
+});

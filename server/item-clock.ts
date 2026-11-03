@@ -11,7 +11,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { isOpenItem } from "./tabs-file.ts";
+import { hiddenLines, isOpenItem } from "./tabs-file.ts";
 
 const DAY_MS = 24 * 3600 * 1000;
 const LABEL = /^\*\*.+\*\*\s*$/;
@@ -56,13 +56,15 @@ export function waitingItems(body: string): WaitingItem[] {
   return items;
 }
 
-/** Letters of the ticked items anywhere in a section, each once. */
+/** Letters of the ticked items anywhere in a section, each once, leaving out code blocks and comments. */
 export function tickedLetters(body: string): string[] {
+  const lines = body.split("\n");
+  const hidden = hiddenLines(lines);
   const letters = new Set<string>();
-  for (const line of body.split("\n")) {
-    const ticked = TICKED_ITEM.exec(line);
+  lines.forEach((line, index) => {
+    const ticked = hidden[index] ? null : TICKED_ITEM.exec(line);
     if (ticked) letters.add(ticked[1]);
-  }
+  });
   return [...letters];
 }
 

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { ItemClock, clockPath, waitingItems } from "../server/item-clock.ts";
+import { ItemClock, clockPath, tickedLetters, waitingItems } from "../server/item-clock.ts";
 import { tempDir } from "./helpers.ts";
 
 const DAY = 24 * 3600 * 1000;
@@ -176,4 +176,24 @@ test("prune drops the tick times of tabs that are gone", () => {
   clock.prune(new Set(["bbbbbbb"]));
   assert.deepEqual(clock.expiredTicks("aaaaaaa", TICKED, later(1.1), DAY), new Set());
   assert.deepEqual(clock.expiredTicks("bbbbbbb", TICKED, later(1.1), DAY), new Set(["b"]));
+});
+
+test("tickedLetters skips item-shaped lines in code blocks and comments", () => {
+  const body = [
+    "",
+    "**Done**",
+    "- a) [x] ~~real~~",
+    "",
+    "~~~",
+    "- b) [x] ~~example~~",
+    "~~~",
+    "<!--",
+    "- c) [x] ~~example~~",
+    "-->",
+    "  ```",
+    "- d) [x] ~~example~~",
+    "  ```",
+    "",
+  ].join("\n");
+  assert.deepEqual(tickedLetters(body), ["a"]);
 });

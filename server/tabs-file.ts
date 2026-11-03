@@ -32,6 +32,7 @@ const LABEL = /^\*\*.+\*\*\s*$/;
 const LETTERED = /^\s*[-*+]\s+([a-z]+)\)(?:\s|$)/;
 const REMOVABLE = /^- ([a-z]+)\) \[x\] /;
 const STARTS_BLOCK = /^(?:[-*+] |\d+\. |#{1,6}(?:[ \t]|$))/;
+const FENCE = /^ {0,3}(`{3,}|~{3,})/;
 const SECTION_LABELS = /^\*\*(?:Waiting on you|Claude's next steps|Done)\*\*\s*$/m;
 const DOTS = { overdue: "🔴", waiting: "🟠", next: "🔵", done: "✅" } as const;
 const KEEP_CLOSED_MS = 24 * 3600 * 1000;
@@ -156,18 +157,51 @@ export function compareLetters(a: string, b: string): number {
 }
 
 /**
+ * For each line, whether it sits in a fenced code block or an HTML comment,
+ * the fences and comment marks included. Such lines are examples, not items.
+ * A fence closes only on a fence of the same character, at least as long, with
+ * nothing after it, so an unusual fence hides more rather than less.
+ */
+export function hiddenLines(lines: string[]): boolean[] {
+  let fence: string | null = null;
+  let comment = false;
+  return lines.map((line) => {
+    if (comment) {
+      if (line.includes("-->")) comment = false;
+      return true;
+    }
+    const run = FENCE.exec(line)?.[1];
+    if (fence !== null) {
+      if (run && run[0] === fence[0] && run.length >= fence.length && line.trim() === run) fence = null;
+      return true;
+    }
+    if (run) {
+      fence = run;
+      return true;
+    }
+    const start = line.indexOf("<!--");
+    if (start === -1) return false;
+    comment = !line.includes("-->", start + 4);
+    return true;
+  });
+}
+
+/**
  * The section without the finished items whose letters are in expired. Like
  * isOpenItem, it leans towards keeping: it removes only a whole one-line item,
  * "- <letter>) [x] " at the start of the line with no box left open on it and
  * nothing wrapped or indented under it, and never the section's highest letter.
+ * Lines in code blocks and comments are never removed and never counted.
  */
 export function withoutFinished(body: string, expired: ReadonlySet<string>): string {
   if (expired.size === 0) return body;
   const lines = body.split("\n");
-  const highest = lines.flatMap((line) => LETTERED.exec(line)?.[1] ?? []).sort(compareLetters).at(-1);
+  const hidden = hiddenLines(lines);
+  const shown = lines.filter((_line, index) => !hidden[index]);
+  const highest = shown.flatMap((line) => LETTERED.exec(line)?.[1] ?? []).sort(compareLetters).at(-1);
   return lines
     .filter((line, index) => {
-      const letter = REMOVABLE.exec(line)?.[1];
+      const letter = hidden[index] ? undefined : REMOVABLE.exec(line)?.[1];
       if (!letter || letter === highest || !expired.has(letter) || line.includes("[ ]")) return true;
       // The line straight after an item belongs to it, wrapped text included,
       // unless it starts another list item, a label or a heading.
