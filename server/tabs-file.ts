@@ -264,12 +264,18 @@ function byCreated(a: AgentRecord, b: AgentRecord): number {
 }
 
 // When the workspace was made, else when its earliest tab was, or with
-// "latestMessage" the newest message to any of its tabs. Any other value, such
-// as a setting saved before this one existed, means "newest".
-function groupKey(workspace: WorkspaceRecord | undefined, tabs: TabEntry[], order: DisplayOptions["workspaceOrder"]): string {
+// "latestMessage" the newest message to any of its tabs, as Paseo counts it:
+// closed tabs too, even once their sections are gone. Any other value, such as
+// a setting saved before this one existed, means "newest".
+function groupKey(
+  workspace: WorkspaceRecord | undefined,
+  tabs: TabEntry[],
+  agents: AgentRecord[],
+  order: DisplayOptions["workspaceOrder"],
+): string {
   const made = workspace?.createdAt || tabs.map((tab) => tab.agent.createdAt).sort()[0];
   if (order !== "latestMessage") return made;
-  return tabs.map((tab) => tab.agent.lastUserMessageAt ?? "").sort().at(-1) || made;
+  return agents.map((agent) => agent.lastUserMessageAt ?? "").sort().at(-1) || made;
 }
 
 type SortableGroup = WorkspaceGroup & { pinned: boolean; key: string };
@@ -347,7 +353,7 @@ export function planFolder(
       archived: Boolean(workspace?.archivedAt),
       tabs,
       pinned: Boolean(workspace?.pinnedAt),
-      key: groupKey(workspace, tabs, options.workspaceOrder),
+      key: groupKey(workspace, tabs, agents.filter((agent) => agent.workspaceId === id), options.workspaceOrder),
     });
   }
   groups.sort(bySidebar);

@@ -606,3 +606,25 @@ test("a letter inside a code block or a comment never counts as the section's hi
   const expected = ["", "**Done**", "- b) [x] ~~second~~", "", "```", "- y) [ ] example", "```", "", "<!--", "- z) [ ] example", "-->", ""];
   assert.equal(withoutFinished(lines.join("\n"), new Set(["a", "b"])), expected.join("\n"));
 });
+
+test("latest message first counts closed tabs whose sections are gone", () => {
+  const agents = [
+    agent("aaaaaaa1", { workspaceId: ONE.id, createdAt: "2026-10-20T11:00:00.000Z", lastUserMessageAt: "2026-10-21T09:00:00.000Z" }),
+    // One's newest message went to this tab, closed two days ago, whose section is gone.
+    agent("ccccccc3", {
+      workspaceId: ONE.id,
+      createdAt: "2026-10-20T12:00:00.000Z",
+      lastUserMessageAt: "2026-10-22T11:00:00.000Z",
+      archivedAt: "2026-10-22T11:30:00.000Z",
+    }),
+    agent("bbbbbbb2", { workspaceId: TWO.id, createdAt: "2026-10-22T09:30:00.000Z", lastUserMessageAt: "2026-10-22T10:00:00.000Z" }),
+  ];
+  const workspaces = [
+    { ...ONE, createdAt: "2026-10-20T10:00:00.000Z" },
+    { ...TWO, createdAt: "2026-10-22T09:00:00.000Z" },
+  ];
+  const options: DisplayOptions = { ...DEFAULT_DISPLAY, workspaceOrder: "latestMessage" };
+  const out = renderFolder(planFolder("", agents, workspaces, NOW, options));
+  assert.doesNotMatch(out, /ccccccc/);
+  assert.deepEqual(groupLines(out), ["# One · 1111111", "# Two · 2222222"]);
+});
