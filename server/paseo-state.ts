@@ -15,6 +15,7 @@ export interface AgentRecord {
   provider: string;
   createdAt: string;
   archivedAt: string | null;
+  lastUserMessageAt: string | null;
 }
 
 export interface WorkspaceRecord {
@@ -22,6 +23,8 @@ export interface WorkspaceRecord {
   cwd: string;
   title: string | null;
   archivedAt: string | null;
+  createdAt: string;
+  pinnedAt: string | null;
 }
 
 export interface PaseoState {
@@ -89,6 +92,7 @@ export function loadState(home: string): PaseoState {
       provider: text(raw.provider) ?? "",
       createdAt: text(raw.createdAt) ?? "",
       archivedAt: text(raw.archivedAt),
+      lastUserMessageAt: text(raw.lastUserMessageAt),
     });
   }
 
@@ -99,7 +103,14 @@ export function loadState(home: string): PaseoState {
       const id = text(raw?.workspaceId);
       const cwd = text(raw?.cwd);
       if (!id || !cwd) continue;
-      workspaces.push({ id, cwd, title: text(raw.title), archivedAt: text(raw.archivedAt) });
+      workspaces.push({
+        id,
+        cwd,
+        title: text(raw.title),
+        archivedAt: text(raw.archivedAt),
+        createdAt: text(raw.createdAt) ?? "",
+        pinnedAt: text(raw.pinnedAt),
+      });
     }
   }
 

@@ -34,6 +34,7 @@ export interface AgentJson {
   provider?: string;
   createdAt?: string;
   archivedAt?: string | null;
+  lastUserMessageAt?: string | null;
 }
 
 /** Writes an agent file. mtime, when given, makes the change visible to the fingerprint. */
@@ -53,7 +54,16 @@ export function writeAgent(home: string, agent: AgentJson, mtime?: Date): void {
   if (mtime) utimesSync(path, mtime, mtime);
 }
 
-export function writeWorkspaces(home: string, list: { workspaceId: string; cwd: string; title: string; archivedAt?: string | null }[]): void {
+export interface WorkspaceJson {
+  workspaceId: string;
+  cwd: string;
+  title: string;
+  archivedAt?: string | null;
+  createdAt?: string;
+  pinnedAt?: string | null;
+}
+
+export function writeWorkspaces(home: string, list: WorkspaceJson[]): void {
   writeFileSync(join(home, "projects", "workspaces.json"), JSON.stringify(list));
 }
 

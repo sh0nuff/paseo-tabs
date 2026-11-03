@@ -55,11 +55,42 @@ test("loadState reads agents and workspaces", (t) => {
       provider: "claude",
       createdAt: "2026-10-24T10:00:00.000Z",
       archivedAt: "2026-10-24T11:00:00.000Z",
+      lastUserMessageAt: null,
     },
   ]);
   assert.deepEqual(state.workspaces, [
-    { id: "wks_1111111aaaaaaa", cwd: "/repo", title: "Repo work", archivedAt: null },
+    { id: "wks_1111111aaaaaaa", cwd: "/repo", title: "Repo work", archivedAt: null, createdAt: "", pinnedAt: null },
   ]);
+});
+
+test("reads when a workspace was made and pinned, and a tab's last message", (t) => {
+  const home = makeHome(t);
+  writeAgent(home, "a1", { ...A1, lastUserMessageAt: "2026-10-24T11:00:00.000Z" });
+  writeAgent(home, "a2", { ...A1, id: "a2bbbbbb-0000" });
+  writeFileSync(
+    join(home, "projects", "workspaces.json"),
+    JSON.stringify([
+      {
+        workspaceId: "wks_1111111aaaaaaa",
+        cwd: "/repo",
+        title: "One",
+        createdAt: "2026-10-20T10:00:00.000Z",
+        pinnedAt: "2026-10-21T10:00:00.000Z",
+      },
+      { workspaceId: "wks_2222222bbbbbbb", cwd: "/repo", title: "Two" },
+    ]),
+  );
+
+  const state = loadState(home);
+  const agentWithMessage = state.agents.find((agent) => agent.id === "a1aaaaaa-0000")!;
+  const agentWithout = state.agents.find((agent) => agent.id === "a2bbbbbb-0000")!;
+
+  assert.equal(state.workspaces[0].createdAt, "2026-10-20T10:00:00.000Z");
+  assert.equal(state.workspaces[0].pinnedAt, "2026-10-21T10:00:00.000Z");
+  assert.equal(state.workspaces[1].createdAt, "");
+  assert.equal(state.workspaces[1].pinnedAt, null);
+  assert.equal(agentWithMessage.lastUserMessageAt, "2026-10-24T11:00:00.000Z");
+  assert.equal(agentWithout.lastUserMessageAt, null);
 });
 
 test("loadState fills missing optional fields with null", (t) => {

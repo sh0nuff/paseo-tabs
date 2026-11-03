@@ -15,12 +15,13 @@ function agent(id: string, fields: Partial<AgentRecord> = {}): AgentRecord {
     provider: "claude",
     createdAt: "2026-10-24T09:00:00.000Z",
     archivedAt: null,
+    lastUserMessageAt: null,
     ...fields,
   };
 }
 
 function ws(id: string, title: string | null, archivedAt: string | null = null): WorkspaceRecord {
-  return { id, cwd: "/repo", title, archivedAt };
+  return { id, cwd: "/repo", title, archivedAt, createdAt: "", pinnedAt: null };
 }
 
 const ONE = ws("wks_1111111aaaaaaa", "One");

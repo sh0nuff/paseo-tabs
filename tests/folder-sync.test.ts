@@ -31,6 +31,7 @@ function agent(id: string, cwd: string, fields: Partial<AgentRecord> = {}): Agen
     provider: "claude",
     createdAt: "2026-10-24T09:00:00.000Z",
     archivedAt: null,
+    lastUserMessageAt: null,
     ...fields,
   };
 }
