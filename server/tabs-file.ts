@@ -8,8 +8,10 @@
 // workspace's tab bar, in the order the tabs were opened, and closed tabs carry
 // on after the open ones. When a file holds tabs from more than one workspace,
 // each workspace's sections sit under "# <workspace title> · <7 characters of
-// its id>". This module owns headings, group lines and section order. Each
-// tab owns the text under its own heading, which is never changed here.
+// its id>". Groups follow Paseo's sidebar: pinned workspaces first, then newest
+// first, with tabs that have no workspace after them and archived workspaces
+// last. This module owns headings, group lines and section order. Each tab owns
+// the text under its own heading, which is never changed here.
 //
 // A closed tab's section stays while anything in it is open. It goes once
 // nothing is open and the tab has been closed for 24 hours.
@@ -37,6 +39,8 @@ export interface DisplayOptions {
   maxNameLength: number;
   /** Days an item may wait on the user unchanged before its tab turns red. 0 means never. */
   overdueAfterDays: number;
+  /** Groups newest first by when the workspace was made, or by the newest message to any of its tabs. */
+  workspaceOrder: "newest" | "latestMessage";
 }
 
 export const DEFAULT_DISPLAY: DisplayOptions = {
@@ -44,6 +48,7 @@ export const DEFAULT_DISPLAY: DisplayOptions = {
   shortenNames: true,
   maxNameLength: 40,
   overdueAfterDays: 7,
+  workspaceOrder: "newest",
 };
 
 /** null for a section with none of the usual labels yet, such as a new tab's placeholder. */
@@ -183,6 +188,27 @@ function byCreated(a: AgentRecord, b: AgentRecord): number {
   return a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0;
 }
 
+// When the workspace was made, else when its earliest tab was, or with
+// "latestMessage" the newest message to any of its tabs. Any other value, such
+// as a setting saved before this one existed, means "newest".
+function groupKey(workspace: WorkspaceRecord | undefined, tabs: TabEntry[], order: DisplayOptions["workspaceOrder"]): string {
+  const made = workspace?.createdAt || tabs.map((tab) => tab.agent.createdAt).sort()[0];
+  if (order !== "latestMessage") return made;
+  return tabs.map((tab) => tab.agent.lastUserMessageAt ?? "").sort().at(-1) || made;
+}
+
+type SortableGroup = WorkspaceGroup & { pinned: boolean; key: string };
+
+// The order described at the top. Ties go by workspace id, so every pass agrees.
+function bySidebar(a: SortableGroup, b: SortableGroup): number {
+  if (a.archived !== b.archived) return a.archived ? 1 : -1;
+  if ((a.id === null) !== (b.id === null)) return a.id === null ? 1 : -1;
+  if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+  if (a.key !== b.key) return a.key > b.key ? -1 : 1;
+  const [x, y] = [a.id ?? "", b.id ?? ""];
+  return x < y ? -1 : x > y ? 1 : 0;
+}
+
 export function planFolder(
   text: string,
   agents: AgentRecord[],
@@ -229,7 +255,7 @@ export function planFolder(
     entries.get(key)![closed ? "closed" : "open"].push(entry);
   }
 
-  const groups: (WorkspaceGroup & { first: string })[] = [];
+  const groups: SortableGroup[] = [];
   for (const [id, { open, closed }] of entries) {
     const workspace = workspaces.find((candidate) => candidate.id === id);
     const tabs = [...open, ...closed];
@@ -240,16 +266,15 @@ export function planFolder(
       title: display(id ? workspace?.title ?? id : "Other tabs"),
       archived: Boolean(workspace?.archivedAt),
       tabs,
-      first: tabs.map((tab) => tab.agent.createdAt).sort()[0],
+      pinned: Boolean(workspace?.pinnedAt),
+      key: groupKey(workspace, tabs, options.workspaceOrder),
     });
   }
-  groups.sort((a, b) =>
-    a.archived !== b.archived ? (a.archived ? 1 : -1) : a.first < b.first ? -1 : a.first > b.first ? 1 : 0,
-  );
+  groups.sort(bySidebar);
 
   return {
     preamble,
-    groups: groups.map(({ first: _first, ...group }) => group),
+    groups: groups.map(({ pinned: _pinned, key: _key, ...group }) => group),
     unknown,
     dots: options.statusDots,
   };

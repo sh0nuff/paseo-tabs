@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { AgentRecord, WorkspaceRecord } from "../server/paseo-state.ts";
-import { DEFAULT_DISPLAY, aboutLine, countOpen, hasOpenItems, planFolder, renderFolder } from "../server/tabs-file.ts";
+import { DEFAULT_DISPLAY, type DisplayOptions, aboutLine, countOpen, hasOpenItems, planFolder, renderFolder } from "../server/tabs-file.ts";
 
 const NOW = new Date("2026-10-24T12:00:00.000Z");
 const NEW = "No items yet. This tab hasn't written to this file.";
@@ -52,14 +52,19 @@ test("groups two workspaces with their own numbers", () => {
   const agents = [
     agent("aaaaaaa1", { workspaceId: ONE.id, createdAt: "2026-10-24T09:00:00.000Z" }),
     agent("bbbbbbb2", { workspaceId: TWO.id, createdAt: "2026-10-24T10:00:00.000Z" }),
+    agent("ccccccc3", { workspaceId: TWO.id, createdAt: "2026-10-24T11:00:00.000Z" }),
   ];
-  const out = sync("", agents, [ONE, TWO]);
+  const workspaces = [
+    { ...ONE, createdAt: "2026-10-20T10:00:00.000Z" },
+    { ...TWO, createdAt: "2026-10-22T10:00:00.000Z" },
+  ];
+  const out = sync("", agents, workspaces);
   assert.equal(
     out,
-    `# One · 1111111\n\n## 1. A title · aaaaaaa\n\n${NEW}\n\n` +
-      `# Two · 2222222\n\n## 1. B title · bbbbbbb\n\n${NEW}\n`,
+    `# Two · 2222222\n\n## 1. B title · bbbbbbb\n\n${NEW}\n\n## 2. C title · ccccccc\n\n${NEW}\n\n` +
+      `# One · 1111111\n\n## 1. A title · aaaaaaa\n\n${NEW}\n`,
   );
-  assert.equal(sync(out, agents, [ONE, TWO]), out);
+  assert.equal(sync(out, agents, workspaces), out);
 });
 
 test("one workspace gets no group line", () => {
@@ -338,9 +343,114 @@ test("tabs with no workspace form an Other tabs group", () => {
   ]);
   assert.equal(
     out,
-    `# Other tabs · 0000000\n\n## 1. A title · aaaaaaa\n\n${NEW}\n\n` +
-      `# One · 1111111\n\n## 1. B title · bbbbbbb\n\n${NEW}\n`,
+    `# One · 1111111\n\n## 1. B title · bbbbbbb\n\n${NEW}\n\n` +
+      `# Other tabs · 0000000\n\n## 1. A title · aaaaaaa\n\n${NEW}\n`,
   );
+});
+
+function groupLines(out: string): string[] {
+  return out.split("\n").filter((line) => line.startsWith("# "));
+}
+
+test("groups run newest workspace first", () => {
+  const agents = [
+    agent("aaaaaaa1", { workspaceId: ONE.id, createdAt: "2026-10-24T09:00:00.000Z" }),
+    agent("bbbbbbb2", { workspaceId: TWO.id, createdAt: "2026-10-24T10:00:00.000Z" }),
+  ];
+  const workspaces = [
+    { ...ONE, createdAt: "2026-10-20T10:00:00.000Z" },
+    { ...TWO, createdAt: "2026-10-22T10:00:00.000Z" },
+  ];
+  assert.deepEqual(groupLines(sync("", agents, workspaces)), ["# Two · 2222222", "# One · 1111111"]);
+});
+
+test("workspaces made at the same moment go by id", () => {
+  const agents = [
+    agent("aaaaaaa1", { workspaceId: TWO.id, createdAt: "2026-10-24T08:00:00.000Z" }),
+    agent("bbbbbbb2", { workspaceId: ONE.id, createdAt: "2026-10-24T09:00:00.000Z" }),
+  ];
+  const workspaces = [
+    { ...ONE, createdAt: "2026-10-20T10:00:00.000Z" },
+    { ...TWO, createdAt: "2026-10-20T10:00:00.000Z" },
+  ];
+  assert.deepEqual(groupLines(sync("", agents, workspaces)), ["# One · 1111111", "# Two · 2222222"]);
+});
+
+test("a pinned workspace's group comes first", () => {
+  const agents = [
+    agent("aaaaaaa1", { workspaceId: ONE.id, createdAt: "2026-10-24T10:00:00.000Z" }),
+    agent("bbbbbbb2", { workspaceId: TWO.id, createdAt: "2026-10-24T09:00:00.000Z" }),
+  ];
+  const workspaces = [
+    { ...ONE, createdAt: "2026-10-20T10:00:00.000Z", pinnedAt: "2026-10-23T10:00:00.000Z" },
+    { ...TWO, createdAt: "2026-10-22T10:00:00.000Z" },
+  ];
+  assert.deepEqual(groupLines(sync("", agents, workspaces)), ["# One · 1111111", "# Two · 2222222"]);
+});
+
+test("latest message first follows the newest message to any tab", () => {
+  // One's newest message went to a closed tab, after Two's last message.
+  const agents = [
+    agent("aaaaaaa1", { workspaceId: ONE.id, createdAt: "2026-10-24T10:00:00.000Z", lastUserMessageAt: "2026-10-24T10:05:00.000Z" }),
+    agent("ccccccc3", {
+      workspaceId: ONE.id,
+      createdAt: "2026-10-24T10:30:00.000Z",
+      lastUserMessageAt: "2026-10-24T11:30:00.000Z",
+      archivedAt: "2026-10-24T11:45:00.000Z",
+    }),
+    agent("bbbbbbb2", { workspaceId: TWO.id, createdAt: "2026-10-24T09:00:00.000Z", lastUserMessageAt: "2026-10-24T11:00:00.000Z" }),
+  ];
+  const workspaces = [
+    { ...ONE, createdAt: "2026-10-20T10:00:00.000Z" },
+    { ...TWO, createdAt: "2026-10-22T10:00:00.000Z" },
+  ];
+  const options: DisplayOptions = { ...DEFAULT_DISPLAY, workspaceOrder: "latestMessage" };
+  const out = renderFolder(planFolder("## 2. C title · ccccccc · closed\n\n- a) [ ] still open\n", agents, workspaces, NOW, options));
+  assert.deepEqual(groupLines(out), ["# One · 1111111", "# Two · 2222222"]);
+});
+
+test("a workspace order missing from older saved settings sorts newest first", () => {
+  // One's tab is older and has the newer message, so only the newest order puts Two first.
+  const agents = [
+    agent("aaaaaaa1", { workspaceId: ONE.id, createdAt: "2026-10-24T09:00:00.000Z", lastUserMessageAt: "2026-10-24T11:30:00.000Z" }),
+    agent("bbbbbbb2", { workspaceId: TWO.id, createdAt: "2026-10-24T10:00:00.000Z", lastUserMessageAt: "2026-10-24T11:00:00.000Z" }),
+  ];
+  const workspaces = [
+    { ...ONE, createdAt: "2026-10-20T10:00:00.000Z" },
+    { ...TWO, createdAt: "2026-10-22T10:00:00.000Z" },
+  ];
+  const { workspaceOrder: _, ...older } = DEFAULT_DISPLAY;
+  const out = renderFolder(planFolder("", agents, workspaces, NOW, older as DisplayOptions));
+  assert.deepEqual(groupLines(out), ["# Two · 2222222", "# One · 1111111"]);
+});
+
+test("a group whose workspace isn't listed sorts by its earliest tab", () => {
+  const THREE = "wks_3333333ccccccc";
+  const agents = [
+    agent("aaaaaaa1", { workspaceId: ONE.id, createdAt: "2026-10-24T08:00:00.000Z" }),
+    agent("ddddddd4", { workspaceId: ONE.id, createdAt: "2026-10-24T11:30:00.000Z" }),
+    agent("bbbbbbb2", { workspaceId: TWO.id, createdAt: "2026-10-24T11:00:00.000Z" }),
+    agent("ccccccc3", { workspaceId: THREE, createdAt: "2026-10-24T10:00:00.000Z" }),
+  ];
+  // One has no date of its own, Two does, and Three isn't listed at all.
+  const workspaces = [ONE, { ...TWO, createdAt: "2026-10-23T12:00:00.000Z" }];
+  const out = sync("", agents, workspaces);
+  assert.deepEqual(groupLines(out), [`# ${THREE} · 3333333`, "# One · 1111111", "# Two · 2222222"]);
+  assert.equal(sync(out, agents, workspaces), out);
+});
+
+test("tabs with no workspace come after the workspaces, before archived ones", () => {
+  const agents = [
+    agent("aaaaaaa1", { workspaceId: null, createdAt: "2026-10-24T08:00:00.000Z" }),
+    agent("bbbbbbb2", { workspaceId: ONE.id, createdAt: "2026-10-24T10:00:00.000Z" }),
+    agent("ccccccc3", { workspaceId: TWO.id, createdAt: "2026-10-24T07:00:00.000Z", archivedAt: "2026-10-24T11:00:00.000Z" }),
+  ];
+  const workspaces = [
+    { ...ONE, createdAt: "2026-10-20T10:00:00.000Z" },
+    { ...TWO, createdAt: "2026-10-23T10:00:00.000Z", archivedAt: "2026-10-24T11:00:00.000Z" },
+  ];
+  const out = sync("## 1. C title · ccccccc · closed\n\n- a) [ ] item\n", agents, workspaces);
+  assert.deepEqual(groupLines(out), ["# One · 1111111", "# Other tabs · 0000000", "# Two · 2222222 · archived"]);
 });
 
 test("countOpen counts open items under one label", () => {
