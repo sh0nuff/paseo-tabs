@@ -79,3 +79,12 @@ test("gives the tab its full agent ID for renaming itself", (t) => {
   assert.match(rule, /update_agent/);
   assert.match(rule, /`abcdef1234-5678`/);
 });
+
+test("the rule asks a tab to finish before saying it can be closed", (t) => {
+  const repo = gitInit(join(tempDir(t), "repo"));
+
+  const rule = context(run({ PASEO_AGENT_ID: "abcdef1234-5678", PASEO_AGENT_CWD: repo }).stdout);
+
+  assert.ok(rule.includes("Closing a tab gives it no turn"), "the rule should say closing gives no turn");
+  assert.ok(rule.includes("a day after they are ticked"), "the rule should say when finished items leave");
+});

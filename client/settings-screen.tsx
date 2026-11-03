@@ -13,6 +13,10 @@ const OVERDUE = [
   { label: "30 days", value: "30" },
   { label: "Never", value: "0" },
 ];
+const ORDERS: { label: string; value: DisplayValues["workspaceOrder"] }[] = [
+  { label: "Newest first", value: "newest" },
+  { label: "Latest message first", value: "latestMessage" },
+];
 
 export function SettingsScreen({ theme, layout }: PluginSurfaceProps) {
   const settings = useSettings(displaySettings);
@@ -93,6 +97,21 @@ export function SettingsScreen({ theme, layout }: PluginSurfaceProps) {
           options={OVERDUE}
           disabled={settings.saving}
           onValueChange={(days) => void save({ overdueAfterDays: Number(days) })}
+        />
+        <SettingsSelect
+          label="Workspace order"
+          hint="How the workspace groups run when one TABS.md holds tabs from more than one workspace. Pick the order your Paseo sidebar uses. Pinned workspaces come first and archived ones last."
+          value={values.workspaceOrder}
+          options={ORDERS}
+          disabled={settings.saving}
+          onValueChange={(workspaceOrder) => void save({ workspaceOrder })}
+        />
+        <SettingsSwitch
+          label="Remove finished items"
+          hint="A ticked item leaves TABS.md a day after it was ticked. The highest letter in each section stays, so no letter is used twice."
+          value={values.removeFinished}
+          disabled={settings.saving}
+          onValueChange={(removeFinished) => void save({ removeFinished })}
         />
       </SettingsSection>
       <SettingsSection title="Panel colours">

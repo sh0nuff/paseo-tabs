@@ -4,7 +4,7 @@ Each tab gets its own section, headed by a coloured dot, its number in the tab b
 
 `TABS.md` is plain Markdown, so you can read and change it in any text editor or in Obsidian as well as in Paseo. Put an x in a box to tick an item, and the plugin updates the dot within a couple of seconds. The file holds no dates, which keeps it easy to edit by hand. The plugin keeps item ages in a small file of its own.
 
-The plugin keeps the headings in step with your tabs. It numbers them in the order they were opened, follows renames, and moves closed tabs to the bottom. A closed tab's section stays while anything in it is still open, and goes once nothing is open and the tab has been closed for 24 hours. When two workspaces share one folder, each gets its own group with its own numbers.
+The plugin keeps the headings in step with your tabs. It numbers them in the order they were opened, follows renames, and moves closed tabs to the bottom. A closed tab's section stays while anything in it is still open, and goes once nothing is open and the tab has been closed for 24 hours. When two workspaces share one folder, each gets its own group with its own numbers. The groups run in the order Paseo's sidebar shows them, newest first or by latest message, with pinned workspaces first and archived ones last. Finished items leave a day after they are ticked, and each section's highest letter stays, so no letter is used twice.
 
 The Tabs panel lists the workspace's tabs with their dots, their one-line summaries and how many items are open, with tabs waiting on you in bold. Tapping a tab opens it, on desktop and on mobile.
 
@@ -14,18 +14,18 @@ Agents write their sections only if they know the rule. The repository is also a
 
 ## Settings
 
-Under Settings, Plugins, Tabs you can turn the dots off, turn off shortening of long names (usually Paseo's copy of a first message), set how long a shortened name may be, set when a waiting item turns red, and pick the panel's colours: Standard, Catppuccin, Gruvbox or Nord. The plugin never changes the names in Paseo.
+Under Settings, Plugins, Tabs you can turn the dots off, turn off shortening of long names (usually Paseo's copy of a first message), set how long a shortened name may be, set when a waiting item turns red, order the workspace groups newest first or by latest message, keep finished items instead of removing them, and pick the panel's colours: Standard, Catppuccin, Gruvbox or Nord. The plugin never changes the names in Paseo.
 
 ## What it reads and writes
 
 - Every 2 seconds it reads Paseo's agent and workspace records in the daemon's home folder, and checks each `TABS.md` for edits.
-- It notes when each waiting item last changed in its own file under `~/.local/state/paseo-tabs/` (or `$XDG_STATE_HOME/paseo-tabs/`), so `TABS.md` needs no dates.
+- It notes when each waiting item last changed, and when each finished item was first seen ticked, in its own file under `~/.local/state/paseo-tabs/` (or `$XDG_STATE_HOME/paseo-tabs/`), so `TABS.md` needs no dates.
 - It creates `TABS.md` only at the top level of a git repository that has an open Claude tab. Whenever it writes the file, it makes sure `TABS.md` is in that repository's `.git/info/exclude`, so the file is never committed.
-- Once a `TABS.md` exists, it rewrites only headings, group lines and the order of sections. The text under each heading belongs to that tab.
+- Once a `TABS.md` exists, it rewrites only headings, group lines and the order of sections, and removes finished items a day after they are ticked. The rest of the text under each heading belongs to that tab.
 - It sends nothing over the network.
 
 ## Limits
 
-- The dots update only while the Paseo daemon runs.
+- The dots update, and finished items leave, only while the Paseo daemon runs.
 - You can bring a closed tab back, history included, by sending it a message, for as long as Claude Code keeps its transcript. By default that is 30 days, set by Claude Code's `cleanupPeriodDays`.
 - Tested on Linux with Paseo 0.11.2.

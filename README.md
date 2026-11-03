@@ -65,7 +65,7 @@ Existing `TABS.md` files stay where they are. Delete them, and the `TABS.md` lin
 
 ### Keeping TABS.md in step
 
-The Paseo plugin reads Paseo's agent and workspace records, and checks each `TABS.md`, every 2 seconds. It updates a `TABS.md` whenever its tabs change, an edit changes what is open, or an item turns overdue.
+The Paseo plugin reads Paseo's agent and workspace records, and checks each `TABS.md`, every 2 seconds. It updates a `TABS.md` whenever its tabs change, an edit changes what is open, an item turns overdue, or a finished item has been ticked for a day.
 
 <img src="assets/tabs-md.png" width="480" alt="A TABS.md with five tab sections: red, orange, blue and green dots on the open tabs, and a closed tab at the bottom">
 
@@ -74,10 +74,11 @@ The Paseo plugin reads Paseo's agent and workspace records, and checks each `TAB
 - Each open tab's heading starts with a dot. 🔴 means an item has waited on you, unchanged, for longer than your limit. 🟠 means something in its section waits on you, 🔵 that only its next steps are open, and ✅ that nothing is open. A new tab and closed tabs get no dot.
 - To know how long an item has waited, the plugin notes when each item under "Waiting on you" last changed. It keeps this in its own file under `$XDG_STATE_HOME/paseo-tabs/` (`~/.local/state/paseo-tabs/` when that variable is unset), one file for each Paseo home. `TABS.md` itself never gets dates. Rewording an item restarts its clock, and ticking it off or removing it forgets it. Items that were already open when the plugin was installed start counting from then.
 - The plugin shortens long names, usually Paseo's copy of a first message, for display. Stray quotes and openers go, the first clause stays, and an ellipsis marks a cut. The names in Paseo stay as they are.
-- When a folder has tabs from more than one Paseo workspace, each workspace's tabs sit under a `# <workspace name> · <short id>` line, numbered on their own.
+- When a folder has tabs from more than one Paseo workspace, each workspace's tabs sit under a `# <workspace name> · <short id>` line, numbered on their own. The groups follow Paseo's sidebar: newest first, by when each workspace was made, which is Paseo's default, or by the latest message to any of their tabs if you choose that in the settings. Pinned workspaces come first and archived ones last, with tabs that belong to no workspace just before the archived ones.
 - A closed tab's section moves to the bottom of its workspace, marked ` · closed`. It stays while anything in it is open, and goes once nothing in it is open and the tab has been closed for 24 hours. Any unticked box counts as open, at any indent. A list line starting with "- Nothing" doesn't.
+- A finished item, a lettered item with a ticked box, leaves `TABS.md` a day after the plugin first sees it ticked. The plugin counts the day in the same file as the item ages, so a restart doesn't reset it, but unticking the item does. The highest letter in each section always stays, so a tab never gives a new item a letter that was used before. Only a whole one-line item that starts `- <letter>) [x]` goes, with nothing indented under it, and the bold labels stay when their lists empty. You can turn this off in the settings.
 - It keeps sections it doesn't recognise, and any text above the first heading, as written.
-- It changes only headings, group lines and the order of sections. The text under each heading belongs to that tab. Before writing, it re-reads the file, so an edit made a moment earlier, by an agent or by you, is not lost.
+- It changes only headings, group lines, the order of sections and, a day after they are ticked, finished items. The rest of the text under each heading belongs to that tab. Before writing, it re-reads the file, so an edit made a moment earlier, by an agent or by you, is not lost.
 
 ### The Tabs panel
 
@@ -97,6 +98,8 @@ Find these in Paseo under Settings, Plugins, Tabs.
 | Shorten long names | The shortened display names | On |
 | Longest name | How many characters a shortened name keeps, from 25 to 80 | 40 |
 | Overdue after | How long an item may wait on you, unchanged, before its tab turns red: 3 days, 1 week, 2 weeks, 30 days, or never | 1 week |
+| Workspace order | How the workspace groups run in a `TABS.md` that holds more than one workspace: newest first, or latest message first. Pick the order your Paseo sidebar uses | Newest first |
+| Remove finished items | Whether finished items leave `TABS.md` a day after they are ticked | On |
 | Palette | The panel's colours: Standard, Catppuccin, Gruvbox or Nord, each in a dark or light version to match your Paseo theme | Standard |
 
 <img src="assets/palettes.png" width="700" alt="The four palettes, Standard, Catppuccin, Gruvbox and Nord, each with rows for overdue, waiting on you, next steps and nothing open">
@@ -110,6 +113,8 @@ The Claude Code plugin's SessionStart hook runs only inside Paseo, in a folder t
 The rule also asks a tab that still carries Paseo's automatic name, the start of its first message, to give itself a short name once its topic is clear, and to do the same for a workspace whose name reads like a message. Tabs you named keep their names. This needs Paseo's own tools inside agents, which the daemon setting `daemon.mcp.injectIntoAgents` turns on.
 
 ### Closed tabs
+
+Closing a tab gives it no turn, so a tab can do nothing once you close it. The rule asks each tab to do any work it would have left for then, and to tick or hand over whatever is left, before it says the tab can be closed.
 
 You can bring a closed tab back by sending it a message, and its section and letters stay valid. Claude Code deletes a conversation's transcript after 30 days by default, after which the tab comes back without its history. To keep transcripts longer, set `cleanupPeriodDays` in `~/.claude/settings.json`, for example `"cleanupPeriodDays": 365`.
 
