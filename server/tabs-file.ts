@@ -31,6 +31,7 @@ const NOTHING_ITEM = /^\s*[-*+] Nothing/;
 const LABEL = /^\*\*.+\*\*\s*$/;
 const LETTERED = /^\s*[-*+]\s+([a-z]+)\)(?:\s|$)/;
 const REMOVABLE = /^- ([a-z]+)\) \[x\] /;
+const STARTS_BLOCK = /^(?:[-*+] |\d+\. |#{1,6}(?:[ \t]|$))/;
 const SECTION_LABELS = /^\*\*(?:Waiting on you|Claude's next steps|Done)\*\*\s*$/m;
 const DOTS = { overdue: "🔴", waiting: "🟠", next: "🔵", done: "✅" } as const;
 const KEEP_CLOSED_MS = 24 * 3600 * 1000;
@@ -158,7 +159,7 @@ export function compareLetters(a: string, b: string): number {
  * The section without the finished items whose letters are in expired. Like
  * isOpenItem, it leans towards keeping: it removes only a whole one-line item,
  * "- <letter>) [x] " at the start of the line with no box left open on it and
- * nothing indented under it, and never the section's highest letter.
+ * nothing wrapped or indented under it, and never the section's highest letter.
  */
 export function withoutFinished(body: string, expired: ReadonlySet<string>): string {
   if (expired.size === 0) return body;
@@ -168,9 +169,14 @@ export function withoutFinished(body: string, expired: ReadonlySet<string>): str
     .filter((line, index) => {
       const letter = REMOVABLE.exec(line)?.[1];
       if (!letter || letter === highest || !expired.has(letter) || line.includes("[ ]")) return true;
-      // Text indented under the item, even after a blank line, belongs to it.
-      const next = lines.slice(index + 1).find((candidate) => candidate.trim() !== "");
-      return next !== undefined && /^\s/.test(next);
+      // The line straight after an item belongs to it, wrapped text included,
+      // unless it starts another list item, a label or a heading.
+      const next = lines[index + 1];
+      if (next === undefined) return false;
+      if (next.trim() !== "") return !(STARTS_BLOCK.test(next) || LABEL.test(next));
+      // After a blank line, only indented text still belongs to it.
+      const after = lines.slice(index + 1).find((candidate) => candidate.trim() !== "");
+      return after !== undefined && /^\s/.test(after);
     })
     .join("\n");
 }

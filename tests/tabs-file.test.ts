@@ -575,3 +575,13 @@ test("planFolder drops expired items, and a second pass changes nothing", () => 
   assert.equal(out, "## ✅ 1. A title · aaaaaaa\n\n**Waiting on you**\n- Nothing open.\n\n**Done**\n- b) [x] ~~two~~\n");
   assert.equal(pass(out), out);
 });
+
+test("keeps a finished item whose text wraps onto the next line", () => {
+  const body = "- a) [ ] Decide X\n- b) [x] ~~Did the long thing that wraps\nonto a second line~~\n- c) [ ] next\n";
+  assert.equal(withoutFinished(body, new Set(["b"])), body);
+});
+
+test("removes a finished item followed straight by another item, a label or a heading", () => {
+  const body = "- a) [x] ~~one~~\n1. a numbered note\n- b) [x] ~~two~~\n**Done**\n- c) [x] ~~three~~\n### Notes\n- d) [ ] last\n";
+  assert.equal(withoutFinished(body, new Set(["a", "b", "c"])), "1. a numbered note\n**Done**\n### Notes\n- d) [ ] last\n");
+});
