@@ -11,7 +11,9 @@
 // its id>". Groups follow Paseo's sidebar: pinned workspaces first, then newest
 // first, with tabs that have no workspace after them and archived workspaces
 // last. This module owns headings, group lines and section order. Each tab owns
-// the text under its own heading, which is never changed here.
+// the text under its own heading, which is never changed here, except that a
+// finished item leaves a day after it was ticked while that setting is on. A
+// section's highest letter always stays, so no letter is ever given out twice.
 //
 // A closed tab's section stays while anything in it is open. It goes once
 // nothing is open and the tab has been closed for 24 hours.
@@ -27,9 +29,13 @@ const BULLET = /^\s*[-*+] /;
 const DONE_ITEM = /^\s*[-*+] (?:[a-z]+\) )?\[x\] /;
 const NOTHING_ITEM = /^\s*[-*+] Nothing/;
 const LABEL = /^\*\*.+\*\*\s*$/;
+const LETTERED = /^\s*[-*+]\s+([a-z]+)\)(?:\s|$)/;
+const REMOVABLE = /^- ([a-z]+)\) \[x\] /;
 const SECTION_LABELS = /^\*\*(?:Waiting on you|Claude's next steps|Done)\*\*\s*$/m;
 const DOTS = { overdue: "🔴", waiting: "🟠", next: "🔵", done: "✅" } as const;
 const KEEP_CLOSED_MS = 24 * 3600 * 1000;
+/** How long a finished item stays after it was first seen ticked. */
+export const TICKED_KEEP_MS = 24 * 3600 * 1000;
 const NO_WORKSPACE_SHORT = "0000000";
 
 /** How TABS.md is shown. These are the plugin's settings in Paseo. */
@@ -41,6 +47,8 @@ export interface DisplayOptions {
   overdueAfterDays: number;
   /** Groups newest first by when the workspace was made, or by the newest message to any of its tabs. */
   workspaceOrder: "newest" | "latestMessage";
+  /** Finished items leave a day after they were ticked. Only false turns this off. */
+  removeFinished: boolean;
 }
 
 export const DEFAULT_DISPLAY: DisplayOptions = {
@@ -49,6 +57,7 @@ export const DEFAULT_DISPLAY: DisplayOptions = {
   maxNameLength: 40,
   overdueAfterDays: 7,
   workspaceOrder: "newest",
+  removeFinished: true,
 };
 
 /** null for a section with none of the usual labels yet, such as a new tab's placeholder. */
@@ -140,6 +149,32 @@ export function tabStatus(body: string, overdue = 0): TabStatus {
   return "done";
 }
 
+/** Item letters in the order they are given out: a to z, then aa, ab and so on. */
+export function compareLetters(a: string, b: string): number {
+  return a.length - b.length || (a < b ? -1 : a > b ? 1 : 0);
+}
+
+/**
+ * The section without the finished items whose letters are in expired. Like
+ * isOpenItem, it leans towards keeping: it removes only a whole one-line item,
+ * "- <letter>) [x] " at the start of the line with no box left open on it and
+ * nothing indented under it, and never the section's highest letter.
+ */
+export function withoutFinished(body: string, expired: ReadonlySet<string>): string {
+  if (expired.size === 0) return body;
+  const lines = body.split("\n");
+  const highest = lines.flatMap((line) => LETTERED.exec(line)?.[1] ?? []).sort(compareLetters).at(-1);
+  return lines
+    .filter((line, index) => {
+      const letter = REMOVABLE.exec(line)?.[1];
+      if (!letter || letter === highest || !expired.has(letter) || line.includes("[ ]")) return true;
+      // Text indented under the item, even after a blank line, belongs to it.
+      const next = lines.slice(index + 1).find((candidate) => candidate.trim() !== "");
+      return next !== undefined && /^\s/.test(next);
+    })
+    .join("\n");
+}
+
 /** Open items under one bold label, up to the next label. */
 export function countOpen(body: string, label: "Waiting on you" | "Claude's next steps"): number {
   let inside = false;
@@ -216,8 +251,11 @@ export function planFolder(
   now: Date,
   options: DisplayOptions = DEFAULT_DISPLAY,
   overdueOf?: (short: string, body: string) => number,
+  expiredOf?: (short: string, body: string) => ReadonlySet<string>,
 ): FolderPlan {
   const display = (name: string) => (options.shortenNames ? shortenName(name, options.maxNameLength) : oneLine(name));
+  const tidy = (short: string, body: string) =>
+    expiredOf && options.removeFinished !== false ? withoutFinished(body, expiredOf(short, body)) : body;
   const { preamble, sections } = splitSections(text);
   const here = new Map(agents.map((agent) => [shortAgentId(agent.id), agent]));
 
@@ -243,10 +281,12 @@ export function planFolder(
   for (const agent of [...agents].sort(byCreated)) {
     const short = shortAgentId(agent.id);
     const closed = agent.archivedAt !== null;
-    const body = bodies.get(short);
-    if (closed && body === undefined) continue; // closed before it ever had a section
+    const written = bodies.get(short);
+    if (closed && written === undefined) continue; // closed before it ever had a section
+    if (closed && !hasOpenItems(written ?? "") && closedForADay(agent, now)) continue;
+    // Finished items are never open, so they go after that check and before the status.
+    const body = written === undefined ? undefined : tidy(short, written);
     const text = body ?? `\n${PLACEHOLDER}\n`;
-    if (closed && !hasOpenItems(text) && closedForADay(agent, now)) continue;
     const key = agent.workspaceId;
     if (!entries.has(key)) entries.set(key, { open: [], closed: [] });
     const title = resolveTitle(agent, headingTitles.get(short), display);

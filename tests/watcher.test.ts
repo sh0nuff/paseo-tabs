@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
-import { DEFAULT_DISPLAY } from "../server/tabs-file.ts";
+import { DEFAULT_DISPLAY, TICKED_KEEP_MS } from "../server/tabs-file.ts";
 import { startWatcher, syncAll } from "../server/watcher.ts";
 import { ItemClock } from "../server/item-clock.ts";
 import { NOW, gitInit, makeHome, tempDir, writeAgent } from "./helpers.ts";
@@ -117,6 +117,43 @@ test("a tab turns red when its item crosses the limit, with nothing else changin
 
   await sleep(900);
   assert.match(readFileSync(join(repo, "TABS.md"), "utf8"), /^## 🔴 1\. A title · aaaaaaa$/m);
+});
+
+test("a ticked item leaves TABS.md a day after its tick, with nothing else changing", async (t) => {
+  const root = tempDir(t);
+  const home = makeHome(root);
+  const repo = gitInit(join(root, "repo"));
+  writeAgent(home, { id: "aaaaaaa1", cwd: repo });
+  writeFileSync(join(repo, "TABS.md"), "## 1. A title · aaaaaaa\n\n**Claude's next steps**\n- b) [ ] next\n\n**Done**\n- a) [x] ~~finished~~\n");
+  const clockPath = join(root, "state", "items.json");
+  mkdirSync(join(root, "state"), { recursive: true });
+  const since = new Date(Date.now() - TICKED_KEEP_MS + 400).toISOString();
+  writeFileSync(clockPath, JSON.stringify({ version: 1, items: {}, ticked: { "aaaaaaa:a": since } }));
+
+  const watcher = startWatcher(home, { intervalMs: 50, clock: new ItemClock(clockPath) });
+  t.after(watcher.stop);
+  assert.match(readFileSync(join(repo, "TABS.md"), "utf8"), /^- a\) \[x\] ~~finished~~$/m);
+
+  await sleep(900);
+  assert.doesNotMatch(readFileSync(join(repo, "TABS.md"), "utf8"), /finished/);
+  assert.match(readFileSync(join(repo, "TABS.md"), "utf8"), /^- b\) \[ \] next$/m);
+});
+
+test("turning removal on gives each finished item a full day from then", (t) => {
+  const root = tempDir(t);
+  const home = makeHome(root);
+  const repo = gitInit(join(root, "repo"));
+  writeAgent(home, { id: "aaaaaaa1", cwd: repo });
+  writeFileSync(join(repo, "TABS.md"), "## 1. A title · aaaaaaa\n\n**Claude's next steps**\n- b) [ ] next\n\n**Done**\n- a) [x] ~~finished~~\n");
+  const clock = new ItemClock(null);
+  const later = (days: number) => new Date(NOW.getTime() + days * 24 * 3600 * 1000);
+
+  syncAll(home, NOW, { ...DEFAULT_DISPLAY, removeFinished: false }, clock);
+  syncAll(home, later(2), DEFAULT_DISPLAY, clock);
+  assert.match(readFileSync(join(repo, "TABS.md"), "utf8"), /finished/);
+
+  syncAll(home, later(3.1), DEFAULT_DISPLAY, clock);
+  assert.doesNotMatch(readFileSync(join(repo, "TABS.md"), "utf8"), /finished/);
 });
 
 test("an empty agent list leaves the clocks alone", (t) => {

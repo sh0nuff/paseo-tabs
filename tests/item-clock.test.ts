@@ -119,3 +119,61 @@ test("nextDue gives the earliest moment an item will turn overdue", () => {
   assert.equal(clock.nextDue(7, later(20).getTime()), null);
   assert.equal(clock.nextDue(0, T0.getTime()), null);
 });
+
+const TICKED = "\n**Claude's next steps**\n- a) [ ] open\n\n**Done**\n- b) [x] ~~done~~\n";
+const REOPENED = "\n**Claude's next steps**\n- a) [ ] open\n- b) [ ] done after all\n";
+
+test("a ticked item expires a day after it was first seen ticked", () => {
+  const clock = new ItemClock(null);
+  assert.deepEqual(clock.expiredTicks("aaaaaaa", TICKED, T0, DAY), new Set());
+  assert.deepEqual(clock.expiredTicks("aaaaaaa", TICKED, later(0.9), DAY), new Set());
+  assert.deepEqual(clock.expiredTicks("aaaaaaa", TICKED, later(1.1), DAY), new Set(["b"]));
+});
+
+test("unticking an item forgets its tick", () => {
+  const clock = new ItemClock(null);
+  clock.expiredTicks("aaaaaaa", TICKED, T0, DAY);
+  clock.expiredTicks("aaaaaaa", REOPENED, later(1 / 24), DAY);
+  clock.expiredTicks("aaaaaaa", TICKED, later(1.05), DAY);
+  assert.deepEqual(clock.expiredTicks("aaaaaaa", TICKED, later(1.1), DAY), new Set());
+});
+
+test("tick times survive a restart", (t) => {
+  const path = join(tempDir(t), "state", "items.json");
+  const first = new ItemClock(path);
+  first.expiredTicks("aaaaaaa", TICKED, T0, DAY);
+  first.save();
+
+  const second = new ItemClock(path);
+  assert.deepEqual(second.expiredTicks("aaaaaaa", TICKED, later(1.1), DAY), new Set(["b"]));
+  assert.match(readFileSync(path, "utf8"), /"version": 1/);
+});
+
+test("a tick entry without a readable date starts fresh", (t) => {
+  const path = join(tempDir(t), "items.json");
+  writeFileSync(path, JSON.stringify({ version: 1, items: {}, ticked: { "aaaaaaa:b": "not a date" } }));
+  const clock = new ItemClock(path);
+  assert.deepEqual(clock.expiredTicks("aaaaaaa", TICKED, T0, DAY), new Set());
+  assert.deepEqual(clock.expiredTicks("aaaaaaa", TICKED, later(1.1), DAY), new Set(["b"]));
+});
+
+test("nextTickExpiry gives the earliest moment a tick expires", () => {
+  const clock = new ItemClock(null);
+  clock.observe("aaaaaaa", body("- a) [ ] Pick a name"), T0, 7); // a waiting item, not a tick
+  clock.expiredTicks("aaaaaaa", TICKED, later(0.25), DAY);
+  clock.expiredTicks("bbbbbbb", TICKED, later(0.5), DAY);
+  assert.equal(clock.nextTickExpiry(DAY, T0.getTime()), later(1.25).getTime());
+  assert.equal(clock.nextTickExpiry(DAY, later(1.3).getTime()), later(1.5).getTime());
+  assert.equal(clock.nextTickExpiry(DAY, later(2).getTime()), null);
+  // and ticks never count as waiting items turning overdue
+  assert.equal(clock.nextDue(7, later(7.1).getTime()), null);
+});
+
+test("prune drops the tick times of tabs that are gone", () => {
+  const clock = new ItemClock(null);
+  clock.expiredTicks("aaaaaaa", TICKED, T0, DAY);
+  clock.expiredTicks("bbbbbbb", TICKED, T0, DAY);
+  clock.prune(new Set(["bbbbbbb"]));
+  assert.deepEqual(clock.expiredTicks("aaaaaaa", TICKED, later(1.1), DAY), new Set());
+  assert.deepEqual(clock.expiredTicks("bbbbbbb", TICKED, later(1.1), DAY), new Set(["b"]));
+});

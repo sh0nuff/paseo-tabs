@@ -11,7 +11,7 @@ type Listener = (state: unknown) => void;
 function fakeServer(initial?: unknown) {
   const listeners: Listener[] = [];
   const handlers = new Map<string, (input: unknown) => unknown>();
-  let stored: unknown = initial ?? { status: "ready", revision: "1", values: { statusDots: true, shortenNames: true, maxNameLength: 40, overdueAfterDays: 7, palette: "default" } };
+  let stored: unknown = initial ?? { status: "ready", revision: "1", values: { statusDots: true, shortenNames: true, maxNameLength: 40, overdueAfterDays: 7, palette: "default", workspaceOrder: "newest", removeFinished: true } };
   const server = {
     registerSettings: () => ({
       read: async () => stored,
@@ -57,7 +57,7 @@ test("the plugin entry applies saved settings and serves tabs.list", async (t) =
   await sleep(20);
   assert.match(readFileSync(join(repo, "TABS.md"), "utf8"), /^## 🟠 1\. A title · aaaaaaa$/m);
 
-  emit({ status: "ready", revision: "2", values: { statusDots: false, shortenNames: true, maxNameLength: 40, overdueAfterDays: 7, palette: "default" } });
+  emit({ status: "ready", revision: "2", values: { statusDots: false, shortenNames: true, maxNameLength: 40, overdueAfterDays: 7, palette: "default", workspaceOrder: "newest", removeFinished: true } });
   await sleep(20);
   assert.match(readFileSync(join(repo, "TABS.md"), "utf8"), /^## 1\. A title · aaaaaaa$/m);
 
@@ -76,7 +76,7 @@ test("the first write uses the saved settings, not the defaults", async (t) => {
   const previousState = process.env.XDG_STATE_HOME;
   process.env.PASEO_HOME = home;
   process.env.XDG_STATE_HOME = join(root, "state");
-  const { server } = fakeServer({ status: "ready", revision: "1", values: { statusDots: false, shortenNames: true, maxNameLength: 40, overdueAfterDays: 7, palette: "default" } });
+  const { server } = fakeServer({ status: "ready", revision: "1", values: { statusDots: false, shortenNames: true, maxNameLength: 40, overdueAfterDays: 7, palette: "default", workspaceOrder: "newest", removeFinished: true } });
 
   const cleanup = contribute(server as never);
   t.after(async () => {

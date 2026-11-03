@@ -1,14 +1,15 @@
 // The plugin's background loop. Paseo has no event for a renamed or brought-back
 // tab, so this checks Paseo's files every couple of seconds, along with each
 // TABS.md it keeps, and syncs every folder whenever any of them changed, when
-// the display settings change, or when a waiting item reaches the overdue limit.
+// the display settings change, when a waiting item reaches the overdue limit, or
+// when a finished item has been ticked for a day.
 
 import { statSync } from "node:fs";
 import { join } from "node:path";
 import { syncFolder } from "./folder-sync.ts";
 import type { ItemClock } from "./item-clock.ts";
 import { loadState, stateFingerprint } from "./paseo-state.ts";
-import { DEFAULT_DISPLAY, type DisplayOptions, shortAgentId } from "./tabs-file.ts";
+import { DEFAULT_DISPLAY, type DisplayOptions, TICKED_KEEP_MS, shortAgentId } from "./tabs-file.ts";
 
 export function syncAll(
   home: string,
@@ -20,10 +21,14 @@ export function syncAll(
   const overdueOf = clock
     ? (short: string, body: string) => clock.observe(short, body, now, display.overdueAfterDays)
     : undefined;
+  const expiredOf =
+    clock && display.removeFinished !== false
+      ? (short: string, body: string) => clock.expiredTicks(short, body, now, TICKED_KEEP_MS)
+      : undefined;
   const results: Record<string, string> = {};
   for (const cwd of new Set(state.agents.map((agent) => agent.cwd))) {
     try {
-      results[cwd] = syncFolder(cwd, state, now, undefined, display, overdueOf);
+      results[cwd] = syncFolder(cwd, state, now, undefined, display, overdueOf, expiredOf);
     } catch (error) {
       results[cwd] = "error";
       console.error(`paseo-tabs: could not sync ${cwd}:`, error);
@@ -77,14 +82,17 @@ export function startWatcher(
   const tick = (force = false) => {
     try {
       const current = fingerprint();
-      // An item turning overdue changes no file, so its moment is watched as well.
-      const overdueNow = due !== null && Date.now() > due;
-      if (!force && !overdueNow && current === seen) return;
+      // An item turning overdue, or a tick reaching a day, changes no file, so
+      // those moments are watched as well.
+      const dueNow = due !== null && Date.now() > due;
+      if (!force && !dueNow && current === seen) return;
       seen = current;
       const now = new Date();
       const options = display();
       folders = Object.keys(syncAll(home, now, options, clock));
-      due = clock?.nextDue(options.overdueAfterDays, now.getTime()) ?? null;
+      const overdueAt = clock?.nextDue(options.overdueAfterDays, now.getTime()) ?? null;
+      const expiresAt = options.removeFinished !== false ? clock?.nextTickExpiry(TICKED_KEEP_MS, now.getTime()) ?? null : null;
+      due = overdueAt === null ? expiresAt : expiresAt === null ? overdueAt : Math.min(overdueAt, expiresAt);
     } catch (error) {
       console.error("paseo-tabs: sync pass failed:", error);
     }

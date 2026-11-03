@@ -1,7 +1,17 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { AgentRecord, WorkspaceRecord } from "../server/paseo-state.ts";
-import { DEFAULT_DISPLAY, type DisplayOptions, aboutLine, countOpen, hasOpenItems, planFolder, renderFolder } from "../server/tabs-file.ts";
+import {
+  DEFAULT_DISPLAY,
+  type DisplayOptions,
+  aboutLine,
+  compareLetters,
+  countOpen,
+  hasOpenItems,
+  planFolder,
+  renderFolder,
+  withoutFinished,
+} from "../server/tabs-file.ts";
 
 const NOW = new Date("2026-10-24T12:00:00.000Z");
 const NEW = "No items yet. This tab hasn't written to this file.";
@@ -475,4 +485,93 @@ test("countOpen counts open items under one label", () => {
   assert.equal(countOpen(body, "Waiting on you"), 2);
   assert.equal(countOpen(body, "Claude's next steps"), 1);
   assert.equal(countOpen("no labels here\n", "Waiting on you"), 0);
+});
+
+test("withoutFinished drops expired ticked items", () => {
+  const body = [
+    "",
+    "### About this tab",
+    "Fixing the login loop.",
+    "",
+    "**Waiting on you**",
+    "- b) [ ] Try a reset on staging.",
+    "",
+    "**Claude's next steps**",
+    "- d) [ ] Add a test.",
+    "",
+    "**Done**",
+    "- a) [x] ~~Found the cause.~~",
+    "- c) [x] ~~Fixed the second check.~~",
+    "",
+  ].join("\n");
+  assert.equal(
+    withoutFinished(body, new Set(["a", "c"])),
+    "\n### About this tab\nFixing the login loop.\n\n**Waiting on you**\n- b) [ ] Try a reset on staging.\n\n" +
+      "**Claude's next steps**\n- d) [ ] Add a test.\n\n**Done**\n",
+  );
+});
+
+test("keeps the highest-lettered item even when it is ticked and expired", () => {
+  const body = "\n**Done**\n- a) [x] ~~one~~\n- b) [x] ~~two~~\n";
+  assert.equal(withoutFinished(body, new Set(["a", "b"])), "\n**Done**\n- b) [x] ~~two~~\n");
+});
+
+test("letters run a to z, then aa", () => {
+  assert.deepEqual(["ab", "z", "aa", "b", "a"].sort(compareLetters), ["a", "b", "z", "aa", "ab"]);
+  const body = "\n**Done**\n- y) [x] ~~y~~\n- aa) [x] ~~aa~~\n- z) [x] ~~z~~\n";
+  assert.equal(withoutFinished(body, new Set(["y", "z", "aa"])), "\n**Done**\n- aa) [x] ~~aa~~\n");
+});
+
+test("keeps a ticked item with lines indented under it, or with [ ] on its line", () => {
+  const body = [
+    "",
+    "**Done**",
+    "- a) [x] ~~parent~~",
+    "  - a detail under it",
+    "- b) [x] ~~mostly done~~, one box [ ] left",
+    "- c) [x] ~~loose item~~",
+    "",
+    "  A paragraph that belongs to c.",
+    "- d) [ ] last",
+    "",
+  ].join("\n");
+  assert.equal(withoutFinished(body, new Set(["a", "b", "c"])), body);
+});
+
+test("never removes unlettered ticked lines, open items, labels or other text", () => {
+  const body = [
+    "",
+    "### About this tab",
+    "a) [x] not a list line",
+    "",
+    "Last updated 2026-10-24 12:00",
+    "",
+    "**Waiting on you**",
+    "- a) [ ] open",
+    "- [x] plain ticked line",
+    "  - b) [x] ~~indented~~",
+    "* c) [x] ~~starred~~",
+    "",
+    "**Done**",
+    "- d) [X] ~~capital X~~",
+    "- e) [ ] last",
+    "",
+  ].join("\n");
+  assert.equal(withoutFinished(body, new Set(["a", "b", "c", "d"])), body);
+});
+
+const FINISHED = "## ✅ 1. A title · aaaaaaa\n\n**Waiting on you**\n- Nothing open.\n\n**Done**\n- a) [x] ~~one~~\n- b) [x] ~~two~~\n";
+
+test("planFolder with removeFinished off changes no section", () => {
+  const options: DisplayOptions = { ...DEFAULT_DISPLAY, removeFinished: false };
+  const out = renderFolder(planFolder(FINISHED, [agent("aaaaaaa1")], [ONE], NOW, options, undefined, () => new Set(["a", "b"])));
+  assert.equal(out, FINISHED);
+});
+
+test("planFolder drops expired items, and a second pass changes nothing", () => {
+  const pass = (text: string) =>
+    renderFolder(planFolder(text, [agent("aaaaaaa1")], [ONE], NOW, DEFAULT_DISPLAY, undefined, () => new Set(["a", "b"])));
+  const out = pass(FINISHED);
+  assert.equal(out, "## ✅ 1. A title · aaaaaaa\n\n**Waiting on you**\n- Nothing open.\n\n**Done**\n- b) [x] ~~two~~\n");
+  assert.equal(pass(out), out);
 });

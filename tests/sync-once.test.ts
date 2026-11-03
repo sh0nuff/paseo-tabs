@@ -59,3 +59,24 @@ test("sync-once respects the clock and never changes it", (t) => {
   assert.match(readFileSync(join(repo, "TABS.md"), "utf8"), /^## 🔴 1\. A title · aaaaaaa$/m);
   assert.equal(statSync(path).mtimeMs, before);
 });
+
+test("sync-once drops expired items using the clock file and never changes it", (t) => {
+  const root = tempDir(t);
+  const home = makeHome(root);
+  const repo = gitInit(join(root, "repo"));
+  writeAgent(home, { id: "aaaaaaa1", cwd: repo });
+  writeFileSync(join(repo, "TABS.md"), "## 1. A title · aaaaaaa\n\n**Claude's next steps**\n- b) [ ] next\n\n**Done**\n- a) [x] ~~finished~~\n");
+  const path = clockPath({ XDG_STATE_HOME: join(root, "state") }, home);
+  mkdirSync(join(root, "state", "paseo-tabs"), { recursive: true });
+  const saved = JSON.stringify({ version: 1, items: {}, ticked: { "aaaaaaa:a": "2020-01-01T00:00:00.000Z" } });
+  writeFileSync(path, saved);
+  const before = statSync(path).mtimeMs;
+
+  run(home);
+
+  const text = readFileSync(join(repo, "TABS.md"), "utf8");
+  assert.doesNotMatch(text, /finished/);
+  assert.match(text, /^- b\) \[ \] next$/m);
+  assert.equal(statSync(path).mtimeMs, before);
+  assert.equal(readFileSync(path, "utf8"), saved);
+});

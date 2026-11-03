@@ -74,6 +74,7 @@ export function syncFolder(
   io: FileIO = fileIO,
   display: DisplayOptions = DEFAULT_DISPLAY,
   overdueOf?: (short: string, body: string) => number,
+  expiredOf?: (short: string, body: string) => ReadonlySet<string>,
 ): "created" | "updated" | "unchanged" | "skipped" | "busy" {
   if (!isGitTopLevel(cwd)) return "skipped";
   const agents = state.agents.filter((agent) => agent.cwd === cwd);
@@ -86,7 +87,7 @@ export function syncFolder(
   }
 
   for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
-    const next = renderFolder(planFolder(current ?? "", agents, state.workspaces, now, display, overdueOf));
+    const next = renderFolder(planFolder(current ?? "", agents, state.workspaces, now, display, overdueOf, expiredOf));
     if (next === current) return "unchanged";
     // A tab may have written to the file while this pass was planning.
     // Write only if the file still holds the text the plan was made from.

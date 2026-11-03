@@ -13,6 +13,7 @@ export const displaySettings = defineSettings({
     overdueAfterDays: z.number().int().min(0).max(365).default(7),
     palette: z.enum(["default", "catppuccin", "gruvbox", "nord"]).default("default"),
     workspaceOrder: z.enum(["newest", "latestMessage"]).default("newest"),
+    removeFinished: z.boolean().default(true),
   }),
 });
 
