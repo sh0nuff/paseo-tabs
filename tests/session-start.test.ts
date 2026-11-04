@@ -88,3 +88,11 @@ test("the rule asks a tab to finish before saying it can be closed", (t) => {
   assert.ok(rule.includes("Closing a tab gives it no turn"), "the rule should say closing gives no turn");
   assert.ok(rule.includes("a day after they are ticked"), "the rule should say when finished items leave");
 });
+
+test("the rule asks each waiting item to say how long the user's part takes", (t) => {
+  const repo = gitInit(join(tempDir(t), "repo"));
+
+  const rule = context(run({ PASEO_AGENT_ID: "abcdef1234-5678", PASEO_AGENT_CWD: repo }).stdout);
+
+  assert.ok(rule.includes("(about N min)"), "the rule should ask for (about N min) on waiting items");
+});
