@@ -13,7 +13,8 @@
 // last. This module owns headings, group lines and section order. Each tab owns
 // the text under its own heading, which is never changed here, except that a
 // finished item leaves a day after it was ticked while that setting is on. A
-// section's highest letter always stays, so no letter is ever given out twice.
+// section's highest letter always stays, so a tab that follows the rule never
+// gives out a letter twice.
 //
 // A closed tab's section stays while anything in it is open. It goes once
 // nothing is open and the tab has been closed for 24 hours.

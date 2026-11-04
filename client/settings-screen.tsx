@@ -108,7 +108,7 @@ export function SettingsScreen({ theme, layout }: PluginSurfaceProps) {
         />
         <SettingsSwitch
           label="Remove finished items"
-          hint="A ticked item leaves TABS.md a day after it was ticked. The highest letter in each section stays, so no letter is used twice."
+          hint="A ticked item leaves TABS.md a day after it was ticked. The highest letter in each section stays, so a tab that follows the rule never reuses a letter."
           value={values.removeFinished}
           disabled={settings.saving}
           onValueChange={(removeFinished) => void save({ removeFinished })}
