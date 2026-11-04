@@ -30,6 +30,7 @@ const DONE_ITEM = /^\s*[-*+] (?:[a-z]+\) )?\[x\] /;
 const NOTHING_ITEM = /^\s*[-*+] Nothing/;
 const LABEL = /^\*\*.+\*\*\s*$/;
 const LETTERED = /^\s*[-*+]\s+([a-z]+)\)(?:\s|$)/;
+const BOXED = /^\s*[-*+]\s+([a-z]+)\)\s+\[[ xX]\]/;
 const REMOVABLE = /^- ([a-z]+)\) \[x\] /;
 const STARTS_BLOCK = /^(?:[-*+] |\d+\. |#{1,6}(?:[ \t]|$))/;
 const FENCE = /^ {0,3}(`{3,}|~{3,})/;
@@ -190,7 +191,9 @@ export function hiddenLines(lines: string[]): boolean[] {
  * The section without the finished items whose letters are in expired. Like
  * isOpenItem, it leans towards keeping: it removes only a whole one-line item,
  * "- <letter>) [x] " at the start of the line with no box left open on it and
- * nothing wrapped or indented under it, and never the section's highest letter.
+ * nothing wrapped or indented under it. It never removes the section's highest
+ * letter, counted both over every lettered line and over boxed items alone, so
+ * a lettered line that isn't an item can't leave the newest item unguarded.
  * Lines in code blocks and comments are never removed and never counted.
  */
 export function withoutFinished(body: string, expired: ReadonlySet<string>): string {
@@ -198,11 +201,12 @@ export function withoutFinished(body: string, expired: ReadonlySet<string>): str
   const lines = body.split("\n");
   const hidden = hiddenLines(lines);
   const shown = lines.filter((_line, index) => !hidden[index]);
-  const highest = shown.flatMap((line) => LETTERED.exec(line)?.[1] ?? []).sort(compareLetters).at(-1);
+  const highest = (pattern: RegExp) => shown.flatMap((line) => pattern.exec(line)?.[1] ?? []).sort(compareLetters).at(-1);
+  const guarded = new Set([highest(LETTERED), highest(BOXED)]);
   return lines
     .filter((line, index) => {
       const letter = hidden[index] ? undefined : REMOVABLE.exec(line)?.[1];
-      if (!letter || letter === highest || !expired.has(letter) || line.includes("[ ]")) return true;
+      if (!letter || guarded.has(letter) || !expired.has(letter) || line.includes("[ ]")) return true;
       // The line straight after an item belongs to it, wrapped text included,
       // unless it starts another list item, a label or a heading.
       const next = lines[index + 1];

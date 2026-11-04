@@ -628,3 +628,9 @@ test("latest message first counts closed tabs whose sections are gone", () => {
   assert.doesNotMatch(out, /ccccccc/);
   assert.deepEqual(groupLines(out), ["# One · 1111111", "# Two · 2222222"]);
 });
+
+test("plain lettered lines can't take the newest item's place", () => {
+  const about = ["", "### About this tab", "Two ways to do it:", "- x) one", "- y) two", ""];
+  const body = [...about, "**Done**", "- a) [x] ~~first~~", "- b) [x] ~~second~~", ""].join("\n");
+  assert.equal(withoutFinished(body, new Set(["a", "b"])), [...about, "**Done**", "- b) [x] ~~second~~", ""].join("\n"));
+});
