@@ -110,7 +110,7 @@ Every `TABS.md` picks up a changed setting at once.
 
 The Claude Code plugin's SessionStart hook runs only inside Paseo, in a folder that is the top level of a git repository. It gives the tab [the rule](claude/rule.md) with its ID and the path to `TABS.md` filled in. Outside Paseo it does nothing.
 
-The rule also asks a tab that still carries Paseo's automatic name, the start of its first message, to give itself a short name once its topic is clear, and to do the same for a workspace whose name reads like a message. Tabs you named keep their names. This needs Paseo's own tools inside agents, which the daemon setting `daemon.mcp.injectIntoAgents` turns on.
+The rule also asks each tab to name itself for its task once that is clear, and the first tab in a workspace to name the workspace for its topic when the workspace's name reads like a message. Names stay stable and carry no status, since the dot shows it. Names you set are kept. This needs Paseo's own tools inside agents, which the daemon setting `daemon.mcp.injectIntoAgents` turns on.
 
 ### Closed tabs
 
