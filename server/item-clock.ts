@@ -145,6 +145,21 @@ export class ItemClock {
     return overdue;
   }
 
+  /**
+   * How many of the tab's waiting items are overdue by the ages already recorded, changing
+   * nothing. For readers other than the watcher, which alone records ages, so a read that
+   * catches TABS.md halfway through a write can't restart an item's clock.
+   */
+  overdueCount(short: string, body: string, now: Date, overdueAfterDays: number): number {
+    if (overdueAfterDays <= 0) return 0;
+    let overdue = 0;
+    for (const item of waitingItems(body)) {
+      const entry = this.entries[`${short}:${item.key}`];
+      if (entry?.text === item.text && now.getTime() - Date.parse(entry.since) > overdueAfterDays * DAY_MS) overdue++;
+    }
+    return overdue;
+  }
+
   /** Records the tab's ticked items and returns the letters ticked for longer than keepMs. */
   expiredTicks(short: string, body: string, now: Date, keepMs: number): Set<string> {
     const prefix = `${short}:`;

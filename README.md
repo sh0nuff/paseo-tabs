@@ -101,7 +101,7 @@ Each workspace row in Paseo's sidebar gets a line of its own from the plugin, un
 - The item is shown without its letter, its box, its Markdown, and a time at the end such as "(about 5 min)".
 - A workspace gets no line when its folder has no `TABS.md`, or when it has no open tab.
 - The line follows `TABS.md` within a few seconds.
-- To turn it off on a device, untick "Tab status" in the sidebar's Display preferences, under Show. When the row is short of room, unticking Host or Diff stats there leaves the line more of it.
+- To turn it off on a device, untick "Tab status" in the sidebar's Display preferences, under Show. When the line is short of room, unticking Host there gives it the whole line. Diff stats sits beside the workspace's name, so unticking it gives the name more room, not this line.
 - It needs Paseo 0.16.0 or later in the app. Older apps keep the Tabs panel and show no line.
 
 ### Settings

@@ -57,7 +57,7 @@ export function workspaceLines(
 ): Record<string, TabLine> {
   const state = loadState(home);
   const overdueOf = clock
-    ? (short: string, body: string) => clock.observe(short, body, now, display.overdueAfterDays)
+    ? (short: string, body: string) => clock.overdueCount(short, body, now, display.overdueAfterDays)
     : undefined;
   const lines: Record<string, TabLine> = {};
   for (const cwd of new Set(state.agents.map((agent) => agent.cwd))) {
@@ -80,7 +80,8 @@ export function cachedFor<T>(ms: number, compute: () => T, clock: () => number =
   let saved: { at: number; value: T } | null = null;
   return () => {
     const now = clock();
-    if (saved === null || now - saved.at >= ms) saved = { at: now, value: compute() };
+    // A clock set back would otherwise keep the old answer until it caught up again.
+    if (saved === null || now < saved.at || now - saved.at >= ms) saved = { at: now, value: compute() };
     return saved.value;
   };
 }

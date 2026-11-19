@@ -99,9 +99,25 @@ test("an item waiting past the limit makes the line overdue", (t) => {
   writeFileSync(join(repo, "TABS.md"), "## 1. A title · aaaaaaa\n\n**Waiting on you**\n- a) [ ] yours\n");
   const clock = new ItemClock(null);
 
-  workspaceLines(home, NOW, DEFAULT_DISPLAY, clock);
+  // The watcher records each item's age; the line only reads it.
+  clock.observe("aaaaaaa", "**Waiting on you**\n- a) [ ] yours\n", NOW, 7);
   const later = new Date(NOW.getTime() + 8 * 24 * 3600 * 1000);
   assert.equal(workspaceLines(home, later, DEFAULT_DISPLAY, clock)[ONE].status, "overdue");
+});
+
+test("reading the lines never changes the item ages the watcher keeps", (t) => {
+  const { home, repo } = setup(t);
+  writeAgent(home, { id: "aaaaaaa1-full", cwd: repo, workspaceId: ONE });
+  const clock = new ItemClock(null);
+  const whole = "**Waiting on you**\n- a) [ ] yours\n";
+  clock.observe("aaaaaaa", whole, NOW, 7);
+
+  // Five days on, TABS.md is caught halfway through a write, with the item cut short.
+  writeFileSync(join(repo, "TABS.md"), "## 1. A title · aaaaaaa\n\n**Waiting on you**\n- a) [ ] yo");
+  workspaceLines(home, new Date(NOW.getTime() + 5 * 24 * 3600 * 1000), DEFAULT_DISPLAY, clock);
+
+  // Eight days on, the item is still as old as it was, so it is overdue.
+  assert.equal(clock.observe("aaaaaaa", whole, new Date(NOW.getTime() + 8 * 24 * 3600 * 1000), 7), 1);
 });
 
 test("firstWaiting cleans the first open item under Waiting on you", () => {
@@ -133,5 +149,14 @@ test("cachedFor computes at most once per window", () => {
   now = 1999;
   assert.equal(get(), 1);
   now = 2000;
+  assert.equal(get(), 2);
+});
+
+test("cachedFor works the answer out again when the clock steps back", () => {
+  let now = 10_000;
+  let calls = 0;
+  const get = cachedFor(2000, () => ++calls, () => now);
+  assert.equal(get(), 1);
+  now = 5_000; // the system clock was set back
   assert.equal(get(), 2);
 });
