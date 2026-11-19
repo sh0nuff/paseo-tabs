@@ -8,6 +8,8 @@ The plugin keeps the headings in step with your tabs. It numbers them in the ord
 
 The Tabs panel lists the workspace's tabs with their dots, their one-line summaries and how many items are open, with tabs waiting on you in bold. Tapping a tab opens it, on desktop and on mobile.
 
+Each workspace's row in Paseo's sidebar also gets a line with its most urgent open tab: the dot, the tab's name and the first item waiting on you. You can see what every workspace is doing without opening it, which would mark it read. The line needs Paseo 0.16.0 or later in the app.
+
 ## Setup
 
 Agents write their sections only if they know the rule. The repository is also a Claude Code plugin that gives every Claude tab the rule when it starts. Agents from other providers still get a numbered heading.
@@ -28,4 +30,4 @@ Under Settings, Plugins, Tabs you can turn the dots off, turn off shortening of 
 
 - The dots update, and finished items leave, only while the Paseo daemon runs.
 - You can bring a closed tab back, history included, by sending it a message, for as long as Claude Code keeps its transcript. By default that is 30 days, set by Claude Code's `cleanupPeriodDays`.
-- Tested on Linux with Paseo 0.11.2.
+- Tested on Linux with Paseo 0.16.2.

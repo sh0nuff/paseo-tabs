@@ -31,7 +31,7 @@ The repository holds two plugins. The Paseo plugin keeps every `TABS.md` in step
 
 ## Install
 
-You need Paseo 0.11.0 or later, for both the daemon and the app, with your tabs running Claude Code. You also need plugins turned on in Paseo, under Settings, Plugins.
+You need Paseo 0.11.0 or later, for both the daemon and the app, with your tabs running Claude Code. You also need plugins turned on in Paseo, under Settings, Plugins. The line on each workspace's row in the sidebar needs Paseo 0.16.0 or later in the app. Older apps get everything else.
 
 Install the Paseo plugin from a shell on the machine that runs the Paseo daemon:
 
@@ -87,6 +87,22 @@ Open it with Ctrl+K (⌘K on macOS) and "Open Tabs". It lists the workspace's ta
 The panel draws its dots, so they show in colour on any machine. The dots in `TABS.md` are emoji, which need a colour emoji font.
 
 Paseo's own `paseo://` tab links do nothing when clicked inside Paseo, which is why the panel exists.
+
+### The sidebar line
+
+Each workspace row in Paseo's sidebar gets a line of its own from the plugin, under the workspace's name and after Paseo's own items there, such as the host. It shows the workspace's most urgent open tab: its dot, its name, and the first item waiting on you, cut to fit the row.
+
+```
+🟠 Fix the login redirect · Try a reset on staging and say whether…
+```
+
+- The most urgent tab shows: red, then orange, blue, a green tick, and last a new tab with no dot yet. On a tie the newest one shows. Closed tabs never do.
+- "+1" after the name means one more tab in that workspace is open.
+- The item is shown without its letter, its box, its Markdown, and a time at the end such as "(about 5 min)".
+- A workspace gets no line when its folder has no `TABS.md`, or when it has no open tab.
+- The line follows `TABS.md` within a few seconds.
+- To turn it off on a device, untick "Tab status" in the sidebar's Display preferences, under Show. When the row is short of room, unticking Host or Diff stats there leaves the line more of it.
+- It needs Paseo 0.16.0 or later in the app. Older apps keep the Tabs panel and show no line.
 
 ### Settings
 
