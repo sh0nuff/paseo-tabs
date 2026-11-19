@@ -1,5 +1,6 @@
 import type { PluginClientContext } from "@getpaseo/plugin/client";
 import { SettingsScreen } from "./client/settings-screen.tsx";
+import { TabsLine } from "./client/tabs-line.tsx";
 import { TabsPanel } from "./client/tabs-panel.tsx";
 
 export default function contribute(client: PluginClientContext) {
@@ -25,5 +26,14 @@ export default function contribute(client: PluginClientContext) {
     icon: "ListChecks",
     Component: SettingsScreen,
   });
+  // Paseo apps before 0.16 have no workspace row slot. They keep the panel.
+  if (typeof client.addWorkspaceRowBadgeItem === "function") {
+    client.addWorkspaceRowBadgeItem({
+      id: "status",
+      title: "Tab status",
+      icon: "ListChecks",
+      Component: TabsLine,
+    });
+  }
   return () => {};
 }
