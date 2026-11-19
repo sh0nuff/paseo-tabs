@@ -56,6 +56,9 @@ test("the plugin entry applies saved settings and serves tabs.list", async (t) =
   });
   await sleep(20);
   assert.match(readFileSync(join(repo, "TABS.md"), "utf8"), /^## 🟠 1\. A title · aaaaaaa$/m);
+  assert.deepEqual(await handlers.get("tabs.lines")!({}), {
+    lines: { wks_1111111aaaaaaa: { status: "waiting", title: "A title", waiting: "answer", more: 0 } },
+  });
 
   emit({ status: "ready", revision: "2", values: { statusDots: false, shortenNames: true, maxNameLength: 40, overdueAfterDays: 7, palette: "default", workspaceOrder: "newest", removeFinished: true } });
   await sleep(20);

@@ -2,10 +2,11 @@ import type { PluginServerContext } from "@getpaseo/plugin/server";
 import { ItemClock, clockPath } from "./server/item-clock.ts";
 import { paseoHome } from "./server/paseo-state.ts";
 import { DEFAULT_DISPLAY, type DisplayOptions } from "./server/tabs-file.ts";
+import { cachedFor, workspaceLines } from "./server/tabs-lines.ts";
 import { listTabs } from "./server/tabs-list.ts";
 import { type Watcher, startWatcher } from "./server/watcher.ts";
 import { displaySettings } from "./shared/settings.ts";
-import { tabsList } from "./shared/tabs-rpc.ts";
+import { tabsLines, tabsList } from "./shared/tabs-rpc.ts";
 
 export default function contribute(server: PluginServerContext) {
   const home = paseoHome(process.env);
@@ -41,6 +42,9 @@ export default function contribute(server: PluginServerContext) {
   const unsubscribe = settings.subscribe(apply);
 
   server.handle(tabsList, ({ workspaceId }) => ({ tabs: listTabs(home, workspaceId, new Date(), display, clock) }));
+  // Every sidebar row asks for its line, so the answer is worked out at most every 2 seconds.
+  const lines = cachedFor(2000, () => workspaceLines(home, new Date(), display, clock));
+  server.handle(tabsLines, () => ({ lines: lines() }));
   return () => {
     stopped = true;
     unsubscribe();
