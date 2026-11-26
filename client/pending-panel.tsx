@@ -2,13 +2,15 @@ import { type PluginWorkspacePanelProps, usePaseo, useRpc } from "@getpaseo/plug
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { type PendingCard, pendingList, pendingPick, pendingSearch } from "../shared/pending-rpc.ts";
-import { sendWhenIdle } from "./pending-send.ts";
+import { type PendingCard, pendingEnabled, pendingList, pendingPick, pendingSearch, pendingUnpick } from "../shared/pending-rpc.ts";
+import { sendPicked } from "./pending-send.ts";
 
 export function PendingPanel({ theme, layout, workspaceId, navigation }: PluginWorkspacePanelProps) {
   const paseo = usePaseo();
   const fetchList = useRpc(pendingList);
   const pick = useRpc(pendingPick);
+  const unpick = useRpc(pendingUnpick);
+  const checkEnabled = useRpc(pendingEnabled);
   const search = useRpc(pendingSearch);
   const queryClient = useQueryClient();
   // "waiting": send queued for the tab. "sent": the message went out.
@@ -17,15 +19,23 @@ export function PendingPanel({ theme, layout, workspaceId, navigation }: PluginW
   const [text, setText] = useState("");
   const term = text.trim();
 
+  // Nothing is listed until the cut-over marker exists; asked again every 30 seconds.
+  const enabled = useQuery({
+    queryKey: ["paseo-pending-enabled"],
+    queryFn: () => checkEnabled({}),
+    refetchInterval: 30_000,
+  });
+  const on = enabled.data?.enabled === true;
   const query = useQuery({
     queryKey: ["paseo-pending", workspaceId],
     queryFn: () => fetchList({ workspaceId }),
     refetchInterval: 5000,
+    enabled: on,
   });
   const hits = useQuery({
     queryKey: ["paseo-pending-search", term],
     queryFn: () => search({ query: term }),
-    enabled: term.length > 0,
+    enabled: on && term.length > 0,
   });
 
   const styles = useMemo(
@@ -74,7 +84,9 @@ export function PendingPanel({ theme, layout, workspaceId, navigation }: PluginW
   );
 
   const choose = async (card: PendingCard) => {
-    if (card.picked || queued[cardKey(card)] === "waiting") return;
+    // Only a send already queued from this panel stops a second press. A card picked earlier
+    // is left to the server, which refuses a pick that still stands.
+    if (queued[cardKey(card)] === "waiting") return;
     setFailure(null);
     try {
       // The RPC marks the item picked and returns the message; sending comes after.
@@ -91,12 +103,15 @@ export function PendingPanel({ theme, layout, workspaceId, navigation }: PluginW
         },
         send: (body: string) => ref.send(body),
       };
-      const sender = sendWhenIdle(adapter, message, { key: workspaceId });
+      const sender = sendPicked(adapter, message, () => unpick({ workspaceId, agentId: card.agentId, letter: card.letter }), {
+        key: workspaceId,
+      });
       sender.done
         .then(() => setQueued((q) => ({ ...q, [cardKey(card)]: q[cardKey(card)] === "waiting" ? "sent" : q[cardKey(card)] })))
         .catch((error: unknown) => {
           setFailure(error instanceof Error ? error.message : String(error));
           setQueued((q) => ({ ...q, [cardKey(card)]: undefined }));
+          void queryClient.invalidateQueries({ queryKey: ["paseo-pending", workspaceId] });
         });
     } catch (error) {
       setFailure(error instanceof Error ? error.message : String(error));
@@ -129,6 +144,13 @@ export function PendingPanel({ theme, layout, workspaceId, navigation }: PluginW
     </>
   );
 
+  if (!on) {
+    return (
+      <View style={[styles.screen, styles.content]}>
+        <Text style={styles.message}>{enabled.isPending ? "Loading…" : "The Pending panel starts at cut-over."}</Text>
+      </View>
+    );
+  }
   if (query.isPending) {
     return (
       <View style={[styles.screen, styles.content]}>

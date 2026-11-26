@@ -3,6 +3,8 @@
 
 import { z } from "zod";
 import { defineAgentTool, type AgentToolContext, type AgentToolDefinition, type AgentToolResult } from "@getpaseo/plugin/server";
+import { existsSync } from "node:fs";
+import { cutoverMarker } from "./pending-rpc.ts";
 import { addItem, finishItem, listOpen, updateItem } from "./pending-store.ts";
 
 const kind = z.enum(["waiting", "next"]);
@@ -82,4 +84,17 @@ export function pendingTools(dir: string): AgentToolDefinition[] {
         })(context),
     }),
   ];
+}
+
+type OpenRequest = { provider: string; tools: AgentToolDefinition[] };
+
+/**
+ * The `agent.open.before` hook: a Claude tab gets the pending tools only once the cut-over
+ * marker exists, checked at every open so the cut-over needs no restart.
+ */
+export function pendingToolsHook(dir: string, tools: AgentToolDefinition[] = pendingTools(dir)) {
+  return async <R extends OpenRequest>({ request }: { request: R }): Promise<R | undefined> => {
+    if (request.provider !== "claude" || !existsSync(cutoverMarker(dir))) return undefined;
+    return { ...request, tools: [...request.tools, ...tools] };
+  };
 }

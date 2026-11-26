@@ -28,6 +28,20 @@ export const pendingPick = defineRpc({
   output: z.object({ message: z.string() }),
 });
 
+/** Clears a pick whose message could not be sent to the tab. */
+export const pendingUnpick = defineRpc({
+  name: "pending.unpick",
+  input: z.object({ workspaceId: z.string(), agentId: z.string(), letter: z.string() }),
+  output: z.object({ ok: z.boolean() }),
+});
+
+/** Whether the Pending panel and tools are on: true once the cutover marker exists. */
+export const pendingEnabled = defineRpc({
+  name: "pending.enabled",
+  input: z.object({}),
+  output: z.object({ enabled: z.boolean() }),
+});
+
 /** Open items in every workspace whose what, action or why contains the query. */
 export const pendingSearch = defineRpc({
   name: "pending.search",

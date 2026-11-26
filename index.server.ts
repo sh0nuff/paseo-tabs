@@ -1,16 +1,16 @@
 import type { PluginServerContext } from "@getpaseo/plugin/server";
 import { ItemClock, clockPath } from "./server/item-clock.ts";
 import { paseoHome } from "./server/paseo-state.ts";
-import { pendingListHandler, pendingPickHandler, pendingSearchHandler } from "./server/pending-rpc.ts";
+import { pendingEnabledHandler, pendingListHandler, pendingPickHandler, pendingSearchHandler, pendingUnpickHandler } from "./server/pending-rpc.ts";
 import { pendingDir } from "./server/pending-store.ts";
-import { pendingTools } from "./server/pending-tools.ts";
+import { pendingToolsHook } from "./server/pending-tools.ts";
 import { DEFAULT_DISPLAY, type DisplayOptions } from "./server/tabs-file.ts";
 import { cachedFor, workspaceLines } from "./server/tabs-lines.ts";
 import { listTabs } from "./server/tabs-list.ts";
 import { storeLines, storeTabRows } from "./server/pending-lines.ts";
 import { type Watcher, startWatcher } from "./server/watcher.ts";
 import { displaySettings } from "./shared/settings.ts";
-import { pendingList, pendingPick, pendingSearch } from "./shared/pending-rpc.ts";
+import { pendingEnabled, pendingList, pendingPick, pendingSearch, pendingUnpick } from "./shared/pending-rpc.ts";
 import { tabsLines, tabsList } from "./shared/tabs-rpc.ts";
 
 export default function contribute(server: PluginServerContext) {
@@ -46,10 +46,8 @@ export default function contribute(server: PluginServerContext) {
   );
   const unsubscribe = settings.subscribe(apply);
 
-  const tools = pendingTools(pendingDir(process.env));
-  server.addHook("agent.open.before", async ({ request }) =>
-    request.provider === "claude" ? { ...request, tools: [...request.tools, ...tools] } : undefined,
-  );
+  // The tools and the panel stay off until the cut-over marker exists.
+  server.addHook("agent.open.before", pendingToolsHook(pendingDir(process.env)));
 
   const pendingOn = () => (display as DisplayOptions & { pendingStore?: boolean }).pendingStore === true;
   server.handle(tabsList, ({ workspaceId }) => ({
@@ -65,6 +63,8 @@ export default function contribute(server: PluginServerContext) {
   const store = pendingDir(process.env);
   server.handle(pendingList, ({ workspaceId }) => pendingListHandler(store, workspaceId));
   server.handle(pendingPick, ({ workspaceId, agentId, letter }) => pendingPickHandler(store, workspaceId, agentId, letter, new Date()));
+  server.handle(pendingUnpick, ({ workspaceId, agentId, letter }) => pendingUnpickHandler(store, workspaceId, agentId, letter));
+  server.handle(pendingEnabled, () => pendingEnabledHandler(store));
   server.handle(pendingSearch, ({ query }) => pendingSearchHandler(store, home, query));
   return () => {
     stopped = true;

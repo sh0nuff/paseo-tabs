@@ -3,7 +3,9 @@
 
 import type { PendingCard } from "../shared/pending-rpc.ts";
 import { loadState } from "./paseo-state.ts";
-import { allFiles, readPending, setPicked, type PendingItem } from "./pending-store.ts";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { allFiles, clearPicked, readPending, setPicked, type PendingItem } from "./pending-store.ts";
 
 function toCard(item: PendingItem): PendingCard {
   const { agentId, letter, what, action, minutes, why, picked, status } = item;
@@ -39,6 +41,20 @@ export function pendingListHandler(dir: string, workspaceId: string): { items: P
 export function pendingPickHandler(dir: string, workspaceId: string, agentId: string, letter: string, now: Date): { message: string } {
   const item = setPicked(dir, workspaceId, agentId, letter, now);
   return { message: pickMessage(toCard(item)) };
+}
+
+export function pendingUnpickHandler(dir: string, workspaceId: string, agentId: string, letter: string): { ok: boolean } {
+  clearPicked(dir, workspaceId, agentId, letter);
+  return { ok: true };
+}
+
+/** The marker the cut-over leaves in the store directory; session-start.mjs reads the same path. */
+export function cutoverMarker(dir: string): string {
+  return join(dir, "cutover");
+}
+
+export function pendingEnabledHandler(dir: string): { enabled: boolean } {
+  return { enabled: existsSync(cutoverMarker(dir)) };
 }
 
 export function pendingSearchHandler(dir: string, home: string, query: string) {

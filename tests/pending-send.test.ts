@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { sendWhenIdle, type SenderAgent, type Timers } from "../client/pending-send.ts";
+import { sendPicked, sendWhenIdle, type SenderAgent, type Timers } from "../client/pending-send.ts";
 
 function fakeTimers() {
   const queue: { id: number; fn: () => void }[] = [];
@@ -176,4 +176,44 @@ test("send() rejecting rejects done", async () => {
     },
   };
   await assert.rejects(sendWhenIdle(agent, "hi", { timers: f.timers, key: "t10" }).done, /send failed/);
+});
+
+test("sendPicked clears the pick when the tab never reports a status", async () => {
+  const f = fakeTimers();
+  const agent = fakeAgent([null]);
+  let unpicked = 0;
+  const h = sendPicked(agent, "hi", async () => { unpicked += 1; }, { timers: f.timers, key: "sp1", intervalMs: 10, giveUpMs: 20 });
+  await f.tick();
+  await f.tick();
+  await assert.rejects(h.done, /did not report its status/);
+  assert.equal(unpicked, 1);
+  assert.deepEqual(agent.sent, []);
+});
+
+test("sendPicked clears the pick when the send throws, and keeps the send's error", async () => {
+  const f = fakeTimers();
+  const agent = fakeAgent(["idle"]);
+  agent.send = async () => { throw new Error("socket closed"); };
+  let unpicked = 0;
+  const h = sendPicked(agent, "hi", async () => { unpicked += 1; }, { timers: f.timers, key: "sp2" });
+  await assert.rejects(h.done, /^Error: socket closed$/);
+  assert.equal(unpicked, 1);
+});
+
+test("sendPicked names a failed unpick too", async () => {
+  const f = fakeTimers();
+  const agent = fakeAgent(["idle"]);
+  agent.send = async () => { throw new Error("socket closed"); };
+  const h = sendPicked(agent, "hi", async () => { throw new Error("store locked"); }, { timers: f.timers, key: "sp3" });
+  await assert.rejects(h.done, /socket closed.*could not be cleared.*store locked/);
+});
+
+test("sendPicked leaves the pick alone when the send goes out", async () => {
+  const f = fakeTimers();
+  const agent = fakeAgent(["idle"]);
+  let unpicked = 0;
+  const h = sendPicked(agent, "hi", async () => { unpicked += 1; }, { timers: f.timers, key: "sp4" });
+  await h.done;
+  assert.equal(unpicked, 0);
+  assert.deepEqual(agent.sent, ["hi"]);
 });

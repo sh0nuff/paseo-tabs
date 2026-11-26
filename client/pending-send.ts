@@ -109,3 +109,27 @@ export function sendWhenIdle(agent: SenderAgent, text: string, options: SendOpti
   void poll();
   return sender;
 }
+
+/**
+ * Sends a picked item's message once the tab is idle. When the sender rejects (it gave up, or
+ * the send failed), calls unpick so the item can be picked again, then rejects with the send's
+ * error. A failed unpick is added to that error rather than hiding it.
+ */
+export function sendPicked(
+  agent: SenderAgent,
+  text: string,
+  unpick: () => Promise<unknown>,
+  options: SendOptions = {},
+): Sender {
+  const sender = sendWhenIdle(agent, text, options);
+  const done = sender.done.catch(async (error: unknown) => {
+    const failure = error instanceof Error ? error : new Error(String(error));
+    try {
+      await unpick();
+    } catch (undo) {
+      throw new Error(`${failure.message} The pick could not be cleared either: ${undo instanceof Error ? undo.message : String(undo)}`);
+    }
+    throw failure;
+  });
+  return { cancel: () => sender.cancel(), done };
+}

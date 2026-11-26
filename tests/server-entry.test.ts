@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import contribute from "../index.server.ts";
@@ -126,14 +126,14 @@ test("the plugin entry keeps its clock under XDG_STATE_HOME", async (t) => {
   assert.match(readFileSync(join(root, "state", "paseo-tabs", files[0]), "utf8"), /"aaaaaaa:a"/);
 });
 
-test("the plugin entry attaches the pending tools to Claude agents only", async (t) => {
+test("the plugin entry attaches the pending tools to Claude agents only, and only after cut-over", async (t) => {
   const root = tempDir(t);
   const home = makeHome(root);
   const previousHome = process.env.PASEO_HOME;
   const previousState = process.env.XDG_STATE_HOME;
   process.env.PASEO_HOME = home;
   process.env.XDG_STATE_HOME = join(root, "state");
-  const { server, hooks } = fakeServer();
+  const { server, hooks, handlers } = fakeServer();
   const cleanup = contribute(server as never);
   t.after(async () => {
     await cleanup?.();
@@ -143,7 +143,16 @@ test("the plugin entry attaches the pending tools to Claude agents only", async 
     else process.env.XDG_STATE_HOME = previousState;
   });
   const hook = hooks.get("agent.open.before") as (a: { request: unknown }) => Promise<{ tools: { name: string }[] } | undefined>;
+  // Before cut-over: no tools, and pending.enabled says so.
+  assert.equal(await hook({ request: { provider: "claude", tools: [] } }), undefined);
+  assert.deepEqual(await handlers.get("pending.enabled")!({}), { enabled: false });
+  const store = join(root, "state", "paseo-tabs", "pending");
+  mkdirSync(store, { recursive: true });
+  writeFileSync(join(store, "cutover"), "");
+  // The marker is read at each open, so no restart is needed.
   const claude = await hook({ request: { provider: "claude", tools: [] } });
   assert.deepEqual(claude?.tools.map((x) => x.name), ["pending_add", "pending_update", "pending_done", "pending_list"]);
   assert.equal(await hook({ request: { provider: "codex", tools: [] } }), undefined);
+  assert.deepEqual(await handlers.get("pending.enabled")!({}), { enabled: true });
+  for (const name of ["pending.unpick", "pending.enabled"]) assert.ok(handlers.has(name), name);
 });

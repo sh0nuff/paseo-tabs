@@ -1,13 +1,19 @@
 // Writes the pending-items store from the command line, so other processes
 // share the plugin's one locked writer.
 //
-//   node tools/pending.ts <add|update|done|drop|reopen|list> --workspace <id> --agent <id>
-//        [--letter x] [--json '{...}'] [--note '...'] [--cwd <dir>] [--dir <store dir>]
+//   node tools/pending.ts <add|update|done|drop|reopen|list> --agent <id> [--workspace <id>]
+//        [--letter x] [--json '{...}'] [--note '...'] [--cwd <dir>] [--dir <store dir>] [--home <Paseo home>]
 //
+// Without --workspace, the agent's workspace comes from Paseo's own records (--home, else
+// $PASEO_HOME or ~/.paseo), and `add` takes that workspace's folder as its --cwd.
 // Prints the item (or the list) as JSON. On error prints the message, exit 1.
 
 import { parseArgs } from "node:util";
+import { loadState, paseoHome } from "../server/paseo-state.ts";
 import { addItem, finishItem, listOpen, pendingDir, reopenItem, updateItem } from "../server/pending-store.ts";
+
+const USAGE = "usage: pending.ts <add|update|done|drop|reopen|list> --agent <id> [--workspace <id>] [--letter x] [--json '{...}'] [--note '...'] [--cwd <dir>] [--home <Paseo home>]";
+const COMMANDS = ["add", "update", "done", "drop", "reopen", "list"];
 
 function main(): void {
   const { positionals, values } = parseArgs({
@@ -20,12 +26,12 @@ function main(): void {
       note: { type: "string" },
       cwd: { type: "string" },
       dir: { type: "string" },
+      home: { type: "string" },
     },
   });
   const [command] = positionals;
+  if (!COMMANDS.includes(command)) throw new Error(USAGE);
   const dir = values.dir ?? pendingDir(process.env);
-  const ws = values.workspace;
-  if (!ws) throw new Error("--workspace is required");
   const now = new Date();
   const fields = values.json ? JSON.parse(values.json) : {};
   const need = (name: "agent" | "letter"): string => {
@@ -33,10 +39,20 @@ function main(): void {
     if (!value) throw new Error(`--${name} is required`);
     return value;
   };
+  let ws = values.workspace;
+  let cwd = values.cwd;
+  if (!ws) {
+    const agentId = need("agent");
+    const state = loadState(values.home ?? paseoHome(process.env));
+    const agent = state.agents.find((a) => a.id === agentId);
+    if (!agent?.workspaceId) throw new Error(`Paseo has no workspace for agent ${agentId}; pass --workspace`);
+    ws = agent.workspaceId;
+    cwd ??= state.workspaces.find((w) => w.id === ws)?.cwd ?? agent.cwd;
+  }
   let out: unknown;
   switch (command) {
     case "add":
-      out = addItem(dir, ws, values.cwd ?? "", need("agent"), fields, now);
+      out = addItem(dir, ws, cwd ?? "", need("agent"), fields, now);
       break;
     case "update":
       out = updateItem(dir, ws, need("agent"), need("letter"), fields, now);
@@ -52,7 +68,7 @@ function main(): void {
       out = listOpen(dir, ws, now);
       break;
     default:
-      throw new Error("usage: pending.ts <add|update|done|drop|reopen|list> --workspace <id> --agent <id> [--letter x] [--json '{...}'] [--note '...']");
+      throw new Error(USAGE);
   }
   process.stdout.write(`${JSON.stringify(out, null, 2)}\n`);
 }

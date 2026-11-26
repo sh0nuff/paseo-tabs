@@ -1,7 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { addItem } from "../server/pending-store.ts";
-import { pendingListHandler, pendingPickHandler, pendingSearchHandler, pickMessage } from "../server/pending-rpc.ts";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { pendingEnabledHandler, pendingListHandler, pendingPickHandler, pendingSearchHandler, pendingUnpickHandler, pickMessage } from "../server/pending-rpc.ts";
 import { makeHome, tempDir, writeWorkspaces } from "./helpers.ts";
 
 const T0 = new Date("2026-11-26T12:00:00.000Z");
@@ -46,4 +48,22 @@ test("search finds items across workspaces with names, blank query finds none", 
   assert.equal(hits[0].workspaceName, "Media");
   assert.equal(pendingSearchHandler(dir, home, "other").hits[0].workspaceName, "wks_2");
   assert.deepEqual(pendingSearchHandler(dir, home, "  ").hits, []);
+});
+
+test("a second pick of the same item is refused until unpick clears it", (t) => {
+  const dir = tempDir(t);
+  addItem(dir, "w", "/c", "A", W, T0);
+  pendingPickHandler(dir, "w", "A", "a", T0);
+  assert.throws(() => pendingPickHandler(dir, "w", "A", "a", T0), /already picked/);
+  assert.deepEqual(pendingUnpickHandler(dir, "w", "A", "a"), { ok: true });
+  assert.deepEqual(pendingListHandler(dir, "w").items.map((i) => i.picked), [false]);
+  assert.match(pendingPickHandler(dir, "w", "A", "a", T0).message, /\(item a\)$/);
+});
+
+test("pending.enabled follows the cutover marker", (t) => {
+  const dir = join(tempDir(t), "pending");
+  assert.deepEqual(pendingEnabledHandler(dir), { enabled: false });
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "cutover"), "");
+  assert.deepEqual(pendingEnabledHandler(dir), { enabled: true });
 });

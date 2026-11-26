@@ -4,7 +4,7 @@ import { spawn } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync, mkdirSync, utimesSync } from "node:fs";
 import { join } from "node:path";
 import {
-  PendingCorrupt, localIso, addItem, finishItem, importFiles, listOpen, pendingDir, readPending, reopenItem, setPicked, updateItem, allFiles,
+  PendingCorrupt, localIso, addItem, finishItem, importFiles, listOpen, pendingDir, readPending, reopenItem, setPicked, clearPicked, updateItem, allFiles,
 } from "../server/pending-store.ts";
 import { tempDir } from "./helpers.ts";
 
@@ -143,4 +143,23 @@ test("a stale lock is stolen, and release leaves another holder's lock alone", (
   addItem(dir, "w", "/c", "A", F, NOW);
   assert.equal(readPending(dir, "w").items.length, 2);
   assert.equal(existsSync(lock), false);
+});
+
+test("setPicked refuses an item already picked, and clearPicked lets it be picked again", (t) => {
+  const dir = tempDir(t);
+  addItem(dir, "w", "/c", "A", F, NOW);
+  setPicked(dir, "w", "A", "a", NOW);
+  assert.throws(() => setPicked(dir, "w", "A", "a", NOW), /Item a is already picked/);
+  assert.equal(clearPicked(dir, "w", "A", "a").picked, false);
+  assert.equal(readPending(dir, "w").items[0].picked, false);
+  assert.equal(setPicked(dir, "w", "A", "a", NOW).picked, true);
+  assert.throws(() => clearPicked(dir, "w", "A", "z"), /No item z/);
+});
+
+test("setPicked leaves changed alone", (t) => {
+  const dir = tempDir(t);
+  addItem(dir, "w", "/c", "A", F, NOW);
+  const before = readPending(dir, "w").items[0].changed;
+  setPicked(dir, "w", "A", "a", new Date(NOW.getTime() + 3 * 24 * 3600 * 1000));
+  assert.equal(readPending(dir, "w").items[0].changed, before);
 });

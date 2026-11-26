@@ -1,7 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { pendingTools } from "../server/pending-tools.ts";
-import { addItem, readPending } from "../server/pending-store.ts";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import type { AgentToolDefinition } from "@getpaseo/plugin/server";
+import { pendingTools, pendingToolsHook } from "../server/pending-tools.ts";
+import { addItem, pendingDir, readPending } from "../server/pending-store.ts";
 import { tempDir } from "./helpers.ts";
 
 const ctx = (id = "A", workspaceId: string | null = "w") => ({ agent: { id, workspaceId, cwd: "/c" }, signal: new AbortController().signal }) as never;
@@ -86,4 +89,15 @@ test("pending_update with only a letter says nothing to update", async (t) => {
   const r = await tool(dir, "pending_update")({ letter: "a" });
   assert.equal(r.isError, true);
   assert.equal(r.text, "Nothing to update.");
+});
+
+test("the open hook adds the tools to Claude tabs only once the cutover marker exists", async (t) => {
+  const dir = pendingDir({ XDG_STATE_HOME: tempDir(t) });
+  const hook = pendingToolsHook(dir);
+  const open = (provider: string) => hook({ request: { provider, tools: [] as AgentToolDefinition[] } });
+  assert.equal(await open("claude"), undefined);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "cutover"), "");
+  assert.deepEqual((await open("claude"))?.tools.map((x) => x.name), ["pending_add", "pending_update", "pending_done", "pending_list"]);
+  assert.equal(await open("codex"), undefined);
 });
