@@ -1,10 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, utimesSync } from "node:fs";
 import { join } from "node:path";
 import {
-  PendingCorrupt, addItem, finishItem, importFiles, listOpen, pendingDir, readPending, reopenItem, setPicked, updateItem, allFiles,
+  PendingCorrupt, localIso, addItem, finishItem, importFiles, listOpen, pendingDir, readPending, reopenItem, setPicked, updateItem, allFiles,
 } from "../server/pending-store.ts";
 import { tempDir } from "./helpers.ts";
 
@@ -104,4 +104,43 @@ test("importFiles merges without validation, and twice adds nothing", (t) => {
   assert.deepEqual(got.items.map((i) => i.letter), ["a", "b"]);
   assert.deepEqual(got.highest, { A: "b", B: "c" });
   assert.equal(addItem(dir, "w", "/c", "B", F, NOW).letter, "d");
+});
+
+test("times carry the local offset", (t) => {
+  const dir = tempDir(t);
+  const item = addItem(dir, "w", "/c", "A", F, NOW);
+  assert.match(item.created, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d[+-]\d\d:\d\d$/);
+  assert.equal(Date.parse(item.created), NOW.getTime());
+  assert.equal(localIso(NOW), item.created);
+});
+
+test("setPicked refuses a done or dropped item", (t) => {
+  const dir = tempDir(t);
+  addItem(dir, "w", "/c", "A", F, NOW);
+  addItem(dir, "w", "/c", "A", F, NOW);
+  finishItem(dir, "w", "A", "a", "done", null, NOW);
+  finishItem(dir, "w", "A", "b", "dropped", null, NOW);
+  assert.throws(() => setPicked(dir, "w", "A", "a", NOW));
+  assert.throws(() => setPicked(dir, "w", "A", "b", NOW));
+});
+
+test("workspace ids that differ only by punctuation get separate files", (t) => {
+  const dir = tempDir(t);
+  addItem(dir, "a/b", "/c", "A", F, NOW);
+  addItem(dir, "a_b", "/c", "A", F, NOW);
+  assert.equal(readPending(dir, "a/b").items.length, 1);
+  assert.equal(readPending(dir, "a_b").items.length, 1);
+  assert.deepEqual(allFiles(dir).map((f) => f.workspaceId).sort(), ["a/b", "a_b"]);
+});
+
+test("a stale lock is stolen, and release leaves another holder's lock alone", (t) => {
+  const dir = tempDir(t);
+  addItem(dir, "w", "/c", "A", F, NOW);
+  const lock = join(dir, "w.json.lock");
+  writeFileSync(lock, "dead");
+  const old = new Date(Date.now() - 60_000);
+  utimesSync(lock, old, old);
+  addItem(dir, "w", "/c", "A", F, NOW);
+  assert.equal(readPending(dir, "w").items.length, 2);
+  assert.equal(existsSync(lock), false);
 });

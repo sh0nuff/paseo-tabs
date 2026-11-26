@@ -3,7 +3,8 @@
 // the TABS.md import) goes through this module: it takes a lock file, reads,
 // changes and writes through a temp file and a rename, so no write is lost.
 
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { existsSync, linkSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { nextLetter } from "./item-clock.ts";
@@ -46,6 +47,17 @@ export class PendingCorrupt extends Error {
   }
 }
 
+/** An ISO 8601 time with the local UTC offset, such as 2026-11-26T14:02:00-05:00. */
+export function localIso(date: Date): string {
+  const p = (n: number, w = 2) => String(Math.abs(n)).padStart(w, "0");
+  const off = -date.getTimezoneOffset();
+  const sign = off >= 0 ? "+" : "-";
+  return (
+    `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}T${p(date.getHours())}:${p(date.getMinutes())}:${p(date.getSeconds())}` +
+    `${sign}${p(Math.trunc(off / 60))}:${p(off % 60)}`
+  );
+}
+
 const DAY_MS = 24 * 3600 * 1000;
 const LOCK_RETRY_MS = 50;
 const LOCK_WAIT_MS = 5000;
@@ -57,7 +69,7 @@ export function pendingDir(env: Record<string, string | undefined>): string {
 }
 
 function filePath(dir: string, workspaceId: string): string {
-  return join(dir, `${workspaceId.replace(/[^A-Za-z0-9._-]/g, "_")}.json`);
+  return join(dir, `${encodeURIComponent(workspaceId)}.json`);
 }
 
 function emptyFile(workspaceId: string, cwd = ""): PendingFile {
@@ -97,19 +109,45 @@ function sleep(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
+/** Removes a stale lock by renaming it away first, so only one waiter wins and a fresh lock is never unlinked. */
+function stealStale(lock: string): void {
+  const aside = `${lock}.stale.${process.pid}.${randomBytes(4).toString("hex")}`;
+  try {
+    renameSync(lock, aside);
+  } catch {
+    return; // someone else stole or released it
+  }
+  try {
+    if (Date.now() - statSync(aside).mtimeMs > LOCK_STALE_MS) {
+      unlinkSync(aside);
+      return;
+    }
+    // Took a fresh lock by mistake: put it back if the slot is still free.
+    try {
+      linkSync(aside, lock);
+    } catch {
+      // another lock took the slot; the holder's release finds a foreign token and leaves it
+    }
+    unlinkSync(aside);
+  } catch {
+    // gone already
+  }
+}
+
 function withLock<T>(path: string, work: () => T): T {
   mkdirSync(join(path, ".."), { recursive: true });
   const lock = `${path}.lock`;
+  const token = `${process.pid}.${randomBytes(8).toString("hex")}`;
   const started = Date.now();
   for (;;) {
     try {
-      closeSync(openSync(lock, "wx"));
+      writeFileSync(lock, token, { flag: "wx" });
       break;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
       try {
         if (Date.now() - statSync(lock).mtimeMs > LOCK_STALE_MS) {
-          unlinkSync(lock);
+          stealStale(lock);
           continue;
         }
       } catch {
@@ -123,9 +161,10 @@ function withLock<T>(path: string, work: () => T): T {
     return work();
   } finally {
     try {
-      unlinkSync(lock);
+      // Release only our own lock: after a steal, the file may be someone else's.
+      if (readFileSync(lock, "utf8") === token) unlinkSync(lock);
     } catch {
-      // already stolen as stale
+      // already gone
     }
   }
 }
@@ -177,7 +216,7 @@ export function addItem(dir: string, ws: string, cwd: string, agentId: string, f
       .sort(compareLetters)
       .at(-1);
     const letter = nextLetter(known);
-    const time = now.toISOString();
+    const time = localIso(now);
     const item: PendingItem = {
       letter, agentId, kind: fields.kind, what: fields.what, action: fields.action, minutes: fields.minutes, why: fields.why,
       status: "open", picked: false, created: time, changed: time, done: null, note: null, opentodo: null,
@@ -199,7 +238,7 @@ export function updateItem(
     for (const key of ["what", "action", "minutes", "why", "kind"] as const) {
       if (patch[key] !== undefined) (item as Record<string, unknown>)[key] = patch[key];
     }
-    item.changed = now.toISOString();
+    item.changed = localIso(now);
     return item;
   });
 }
@@ -210,7 +249,7 @@ export function finishItem(dir: string, ws: string, agentId: string, letter: str
     item.status = status;
     item.note = note;
     item.picked = false;
-    item.done = now.toISOString();
+    item.done = localIso(now);
     item.changed = item.done;
     return item;
   });
@@ -221,7 +260,7 @@ export function reopenItem(dir: string, ws: string, agentId: string, letter: str
     const item = find(file, agentId, letter);
     item.status = "open";
     item.done = null;
-    item.changed = now.toISOString();
+    item.changed = localIso(now);
     return item;
   });
 }
@@ -229,9 +268,10 @@ export function reopenItem(dir: string, ws: string, agentId: string, letter: str
 export function setPicked(dir: string, ws: string, agentId: string, letter: string, now: Date): PendingItem {
   return mutate(dir, ws, (file) => {
     const item = find(file, agentId, letter);
+    if (item.status !== "open") throw new Error(`Item ${letter} is ${item.status}; only an open item can be picked`);
     for (const other of file.items) other.picked = false;
     item.picked = true;
-    item.changed = now.toISOString();
+    item.changed = localIso(now);
     return item;
   });
 }
@@ -247,7 +287,7 @@ export function allFiles(dir: string): PendingFile[] {
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
     .filter((name) => name.endsWith(".json"))
-    .map((name) => readFileAt(join(dir, name), name.slice(0, -5)));
+    .map((name) => readFileAt(join(dir, name), decodeURIComponent(name.slice(0, -5))));
 }
 
 /**
