@@ -19,6 +19,11 @@ export interface MoveContext {
   activeShortIds: ReadonlySet<string>;
   /** Paseo's records could not be read, so every tab counts as open and nothing moves. */
   stateUnknown: boolean;
+  /**
+   * TABS.md is regenerated from elsewhere, so the live block of an active tab is the
+   * truth: its copy in TABS-DONE.md is dropped even when the text differs.
+   */
+  liveIsTruth?: boolean;
 }
 
 export interface MoveResult {
@@ -149,7 +154,7 @@ export function moveFinishedSections(tabsText: string, doneText: string, ctx: Mo
         coming.push(block);
         continue;
       }
-      if (sameText(live, block)) {
+      if (ctx.liveIsTruth || sameText(live, block)) {
         returned.push(block.short);
         continue;
       }

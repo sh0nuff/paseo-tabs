@@ -100,15 +100,23 @@ export function syncFolder(
 
   for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
     const done = io.read(donePath) ?? "";
+    const view = viewOf?.();
     // A tab brought back gets its section returned first, and nothing moves out on
     // the same pass. The next pass, started by this file changing, does the moving.
-    // A view already holds every tab with items, so it needs no returning.
-    const view = viewOf?.();
-    let moves = moveFinishedSections(view ?? current ?? "", done, { closedShortIds: new Set(), activeShortIds, stateUnknown });
-    const reviving = view === undefined && moves.returned.length > 0;
-    if (!reviving) moves = moveFinishedSections(view ?? current ?? "", done, { closedShortIds, activeShortIds, stateUnknown });
-    const next =
-      view !== undefined ? moves.tabs : renderFolder(planFolder(moves.tabs, agents, state.workspaces, now, display, overdueOf, expiredOf));
+    // A view already holds every tab in the folder, so a reactivated tab's old copy in
+    // TABS-DONE.md is just dropped, and nothing returns.
+    let moves: ReturnType<typeof moveFinishedSections>;
+    let reviving = false;
+    let next: string;
+    if (view !== undefined) {
+      moves = moveFinishedSections(view, done, { closedShortIds, activeShortIds, stateUnknown, liveIsTruth: true });
+      next = moves.tabs;
+    } else {
+      moves = moveFinishedSections(current ?? "", done, { closedShortIds: new Set(), activeShortIds, stateUnknown });
+      reviving = moves.returned.length > 0;
+      if (!reviving) moves = moveFinishedSections(current ?? "", done, { closedShortIds, activeShortIds, stateUnknown });
+      next = renderFolder(planFolder(moves.tabs, agents, state.workspaces, now, display, overdueOf, expiredOf));
+    }
     const doneChanged = moves.done !== done;
     if (next === current && !doneChanged) return "unchanged";
     // A tab may have written to the file while this pass was planning.

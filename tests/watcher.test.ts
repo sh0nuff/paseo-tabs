@@ -166,3 +166,16 @@ test("an empty agent list leaves the clocks alone", (t) => {
 
   assert.equal(clock.observe("aaaaaaa", "\n**Waiting on you**\n- a) [ ] answer\n", new Date(NOW.getTime() + 8 * 24 * 3600 * 1000), 7), 1);
 });
+
+test("with pendingStore off the output for an existing file is unchanged by the view path", (t) => {
+  const root = tempDir(t);
+  const home = makeHome(root);
+  const repo = gitInit(join(root, "repo"));
+  writeAgent(home, { id: "aaaaaaa1", cwd: repo });
+  writeFileSync(join(repo, "TABS.md"), "## 1. A title · aaaaaaa\n\n**Waiting on you**\n- a) [ ] answer (about 5 min)\n");
+  syncAll(home, NOW, { ...DEFAULT_DISPLAY, pendingStore: false } as typeof DEFAULT_DISPLAY, undefined, join(root, "pending"));
+  assert.equal(
+    readFileSync(join(repo, "TABS.md"), "utf8"),
+    "## 🟠 1. A title · aaaaaaa\n\n**Waiting on you**\n- a) [ ] answer (about 5 min)\n",
+  );
+});

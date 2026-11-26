@@ -88,3 +88,23 @@ test("an unreadable store leaves TABS.md alone", (t) => {
   assert.equal(readFileSync(join(repo, "TABS.md"), "utf8"), "keep me\n");
   assert.equal(quiet.mock.callCount(), 1);
 });
+
+test("a closed tab moved out and then reactivated has one block in TABS.md and none in TABS-DONE.md", (t) => {
+  const { home, repo, dir } = repoWithStore(t);
+  const gone = "2026-11-24T10:00:00.000Z";
+  writeAgent(home, { id: "aaaaaaa1", cwd: repo });
+  writeAgent(home, { id: "bbbbbbb2", cwd: repo, archivedAt: gone });
+  const store = join(dir, "wks_1111111aaaaaaa.json");
+  const write = (items: unknown[]) => writeFileSync(store, JSON.stringify({ workspaceId: "wks_1111111aaaaaaa", cwd: repo, highest: {}, items }));
+  write([item("aaaaaaa1", "a", "open"), item("bbbbbbb2", "a", "done")]);
+  syncAll(home, NOW, ON, undefined, dir);
+  assert.match(readFileSync(join(repo, "TABS-DONE.md"), "utf8"), /bbbbbbb · closed/);
+  // reactivated, with a new open item
+  writeAgent(home, { id: "bbbbbbb2", cwd: repo, archivedAt: null });
+  write([item("aaaaaaa1", "a", "open"), item("bbbbbbb2", "a", "done"), item("bbbbbbb2", "b", "open")]);
+  syncAll(home, NOW, ON, undefined, dir);
+  const tabs = readFileSync(join(repo, "TABS.md"), "utf8");
+  assert.equal(tabs.match(/· bbbbbbb/g)?.length, 1);
+  assert.match(tabs, /item b/);
+  assert.doesNotMatch(readFileSync(join(repo, "TABS-DONE.md"), "utf8"), /bbbbbbb/);
+});
