@@ -38,7 +38,12 @@ function mostUrgent(open: TabEntry[]): TabEntry {
 
 /** The first open item under "Waiting on you" as one plain line, without its endings, or "". */
 export function firstWaiting(body: string): string {
-  let text = waitingItems(body)[0]?.text ?? "";
+  return cleanLine(waitingItems(body)[0]?.text ?? "");
+}
+
+/** One item's text as one plain line: endings, links and markup removed, long text cut. */
+export function cleanLine(raw: string): string {
+  let text = raw;
   for (let before = ""; before !== text; ) {
     before = text;
     text = text.replace(ENDING, "");

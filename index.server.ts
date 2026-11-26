@@ -7,6 +7,7 @@ import { pendingTools } from "./server/pending-tools.ts";
 import { DEFAULT_DISPLAY, type DisplayOptions } from "./server/tabs-file.ts";
 import { cachedFor, workspaceLines } from "./server/tabs-lines.ts";
 import { listTabs } from "./server/tabs-list.ts";
+import { storeLines, storeTabRows } from "./server/pending-lines.ts";
 import { type Watcher, startWatcher } from "./server/watcher.ts";
 import { displaySettings } from "./shared/settings.ts";
 import { pendingList, pendingPick, pendingSearch } from "./shared/pending-rpc.ts";
@@ -50,9 +51,16 @@ export default function contribute(server: PluginServerContext) {
     request.provider === "claude" ? { ...request, tools: [...request.tools, ...tools] } : undefined,
   );
 
-  server.handle(tabsList, ({ workspaceId }) => ({ tabs: listTabs(home, workspaceId, new Date(), display, clock) }));
+  const pendingOn = () => (display as DisplayOptions & { pendingStore?: boolean }).pendingStore === true;
+  server.handle(tabsList, ({ workspaceId }) => ({
+    tabs: pendingOn()
+      ? storeTabRows(home, pendingDir(process.env), workspaceId, new Date(), display)
+      : listTabs(home, workspaceId, new Date(), display, clock),
+  }));
   // Every sidebar row asks for its line, so the answer is worked out at most every 2 seconds.
-  const lines = cachedFor(2000, () => workspaceLines(home, new Date(), display, clock));
+  const lines = cachedFor(2000, () =>
+    pendingOn() ? storeLines(home, pendingDir(process.env), new Date(), display) : workspaceLines(home, new Date(), display, clock),
+  );
   server.handle(tabsLines, () => ({ lines: lines() }));
   const store = pendingDir(process.env);
   server.handle(pendingList, ({ workspaceId }) => pendingListHandler(store, workspaceId));
