@@ -1,12 +1,14 @@
 // SessionStart hook for the paseo-tabs Claude Code plugin.
 //
 // Inside a Paseo tab whose folder is the top level of a git repo, it gives the
-// tab the TABS.md rule, with the tab's short ID and the file's path filled in.
+// tab the TABS.md rule (or, once the pending store's cutover marker exists, the
+// Pending panel rule), with the tab's short ID and the file's path filled in.
 // Anywhere else it prints nothing. It never fails the session.
 
 import { execFileSync } from "node:child_process";
-import { readFileSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 
 function hookInput() {
@@ -29,13 +31,23 @@ function isGitTopLevel(dir) {
   }
 }
 
+// After cut-over, the pending store's marker file switches the tab to the Pending panel rule.
+function pendingCutover() {
+  try {
+    const state = process.env.XDG_STATE_HOME || join(process.env.HOME || homedir(), ".local", "state");
+    return existsSync(join(state, "paseo-tabs", "pending", "cutover"));
+  } catch {
+    return false;
+  }
+}
+
 try {
   const agentId = process.env.PASEO_AGENT_ID;
   if (agentId) {
     const cwd = process.env.PASEO_AGENT_CWD || hookInput().cwd;
     if (typeof cwd === "string" && cwd && isGitTopLevel(cwd)) {
       const here = dirname(fileURLToPath(import.meta.url));
-      const rule = readFileSync(join(here, "rule.md"), "utf8")
+      const rule = readFileSync(join(here, pendingCutover() ? "rule-pending.md" : "rule.md"), "utf8")
         .replaceAll("{{SHORT_ID}}", agentId.slice(0, 7))
         .replaceAll("{{AGENT_ID}}", agentId)
         .replaceAll("{{TABS_PATH}}", join(cwd, "TABS.md"));

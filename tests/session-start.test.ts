@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { copyFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gitInit, tempDir } from "./helpers.ts";
 
@@ -10,7 +10,7 @@ const HOOK = fileURLToPath(new URL("../claude/session-start.mjs", import.meta.ur
 
 function run(env: Record<string, string>, input = "", hook = HOOK) {
   const result = spawnSync(process.execPath, [hook], {
-    env: { PATH: process.env.PATH ?? "", HOME: process.env.HOME ?? "", ...env },
+    env: { PATH: process.env.PATH ?? "", HOME: process.env.HOME ?? "", XDG_STATE_HOME: "/nonexistent-state", ...env },
     input,
     encoding: "utf8",
     timeout: 5000,
@@ -95,4 +95,63 @@ test("the rule asks each waiting item to say how long the user's part takes", (t
   const rule = context(run({ PASEO_AGENT_ID: "abcdef1234-5678", PASEO_AGENT_CWD: repo }).stdout);
 
   assert.ok(rule.includes("(about N min)"), "the rule should ask for (about N min) on waiting items");
+});
+
+test("with the cutover marker, prints the pending rule with the ids filled", (t) => {
+  const repo = gitInit(join(tempDir(t), "repo"));
+  const state = tempDir(t);
+  mkdirSync(join(state, "paseo-tabs", "pending"), { recursive: true });
+  writeFileSync(join(state, "paseo-tabs", "pending", "cutover"), "");
+
+  const rule = context(
+    run({ PASEO_AGENT_ID: "abcdef1234-5678", PASEO_AGENT_CWD: repo, XDG_STATE_HOME: state }).stdout,
+  );
+
+  assert.match(rule, /pending_add/);
+  assert.match(rule, /Picked from the panel:/);
+  assert.match(rule, /`abcdef1234-5678`/);
+  assert.doesNotMatch(rule, /TABS\.md/);
+  assert.doesNotMatch(rule, /\{\{/);
+});
+
+test("the marker is found under HOME/.local/state when XDG_STATE_HOME is unset", (t) => {
+  const repo = gitInit(join(tempDir(t), "repo"));
+  const home = tempDir(t);
+  mkdirSync(join(home, ".local", "state", "paseo-tabs", "pending"), { recursive: true });
+  writeFileSync(join(home, ".local", "state", "paseo-tabs", "pending", "cutover"), "");
+
+  const result = spawnSync(process.execPath, [HOOK], {
+    env: { PATH: process.env.PATH ?? "", HOME: home, PASEO_AGENT_ID: "abcdef1234", PASEO_AGENT_CWD: repo },
+    encoding: "utf8",
+    timeout: 5000,
+  });
+
+  assert.match(context(result.stdout), /pending_add/);
+});
+
+test("without the marker, prints today's TABS.md rule", (t) => {
+  const repo = gitInit(join(tempDir(t), "repo"));
+  const state = tempDir(t);
+  mkdirSync(join(state, "paseo-tabs", "pending"), { recursive: true });
+
+  const rule = context(run({ PASEO_AGENT_ID: "abcdef1234", PASEO_AGENT_CWD: repo, XDG_STATE_HOME: state }).stdout);
+
+  assert.ok(rule.includes(`${repo}/TABS.md`));
+  assert.doesNotMatch(rule, /pending_add/);
+});
+
+test("with the marker but no pending rule file, still exits 0 and prints nothing", (t) => {
+  const root = tempDir(t);
+  const repo = gitInit(join(root, "repo"));
+  const state = join(root, "state");
+  mkdirSync(join(state, "paseo-tabs", "pending"), { recursive: true });
+  writeFileSync(join(state, "paseo-tabs", "pending", "cutover"), "");
+  mkdirSync(join(root, "plugin"));
+  copyFileSync(HOOK, join(root, "plugin", "session-start.mjs"));
+  copyFileSync(join(dirname(HOOK), "rule.md"), join(root, "plugin", "rule.md"));
+
+  assert.deepEqual(
+    run({ PASEO_AGENT_ID: "abcdef1234", PASEO_AGENT_CWD: repo, XDG_STATE_HOME: state }, "", join(root, "plugin", "session-start.mjs")),
+    { stdout: "", status: 0 },
+  );
 });
