@@ -33,6 +33,12 @@ export interface MoveResult {
 interface Block {
   short: string | null; // null for anything that is not a tab section
   lines: string[];
+  /**
+   * True when the file-level view of fences and comments and the block-level view
+   * disagree near this block: its heading looked hidden, or the next block's did.
+   * Nothing near such a spot moves.
+   */
+  suspect?: boolean;
 }
 
 const isHeading = (line: string) => TAB_HEADING.test(line) || GROUP_LINE.test(line);
@@ -51,13 +57,21 @@ function endsHidden(lines: string[]): boolean {
  */
 function blocks(text: string): { preamble: string[]; blocks: Block[] } {
   const lines = text.split("\n");
+  const fileHidden = hiddenLines(lines);
   const chunks: string[][] = [[]];
-  for (const line of lines) {
-    if (isHeading(line)) chunks.push([line]);
-    else chunks[chunks.length - 1].push(line);
-  }
+  const hiddenHeading: boolean[] = [];
+  lines.forEach((line, index) => {
+    if (isHeading(line)) {
+      chunks.push([line]);
+      hiddenHeading.push(fileHidden[index]);
+    } else chunks[chunks.length - 1].push(line);
+  });
   const preamble = [...chunks[0]];
-  const out: Block[] = chunks.slice(1).map((chunk) => ({ short: TAB_HEADING.exec(chunk[0])?.[2] ?? null, lines: chunk }));
+  const out: Block[] = chunks.slice(1).map((chunk, n) => ({
+    short: TAB_HEADING.exec(chunk[0])?.[2] ?? null,
+    lines: chunk,
+    suspect: hiddenHeading[n] || hiddenHeading[n + 1] === true,
+  }));
   // A stray "## " line before any heading starts a block of its own, as it always has.
   const hidden = hiddenLines(preamble);
   const stray = preamble.findIndex((line, index) => !hidden[index] && line.startsWith("## "));
@@ -90,7 +104,10 @@ export function moveFinishedSections(tabsText: string, doneText: string, ctx: Mo
   const moved: string[] = [];
   const returned: string[] = [];
   const firstInTabs = new Map<string, Block>();
-  for (const block of tabs.blocks) if (block.short !== null && !firstInTabs.has(block.short)) firstInTabs.set(block.short, block);
+  // A suspect block, such as a heading shown in a fenced example, never counts as the tab's section.
+  for (const block of tabs.blocks) {
+    if (block.short !== null && !block.suspect && !firstInTabs.has(block.short)) firstInTabs.set(block.short, block);
+  }
 
   // Sections leaving TABS.md. Only the first block of a short ID moves. If TABS-DONE.md
   // already has the ID, say after a crash, the copy from TABS.md replaces it: it is the
@@ -102,6 +119,7 @@ export function moveFinishedSections(tabsText: string, doneText: string, ctx: Mo
     const movable =
       !ctx.stateUnknown &&
       block.short !== null &&
+      !block.suspect &&
       firstInTabs.get(block.short) === block &&
       ctx.closedShortIds.has(block.short) &&
       !ctx.activeShortIds.has(block.short) &&

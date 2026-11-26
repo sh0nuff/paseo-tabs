@@ -333,3 +333,59 @@ test("a tab active in Paseo is never moved, even if its block was mis-split", ()
   });
   assert.deepEqual(out.moved, []);
 });
+
+const FAKE = "## 9. Other · ddddddd · closed";
+const liveWithFence = (open: string, close: string, later: string) =>
+  `## 1. Live · bbbbbbb\n\n### About this tab\nNotes.\n\n${open}\n${FAKE}\n${close}\n\n**Done**\n- a) [x] ~~one~~\n\nMore notes.\n\n${later}\ncode\n${close}\n`;
+
+function fakeHeading(t: { after: (fn: () => void) => void }, text: string) {
+  const f = setup(t, text);
+  const s = state(
+    agent("bbbbbbb2", f.repo, { title: "Live", createdAt: "2026-10-24T09:00:00.000Z" }),
+    agent("ddddddd4", f.repo, { title: "Other", createdAt: "2026-10-24T10:00:00.000Z", archivedAt: LONG_AGO }),
+  );
+  return { f, s };
+}
+
+for (const [name, open, close, later] of [
+  ["N2 js info string", "```", "```", "```js"],
+  ["N3 ~~~sh", "~~~", "~~~", "~~~sh"],
+  ["N4 ````x", "````", "````", "````x"],
+] as const) {
+  test(`${name}: a fenced fake heading for a closed tab moves nothing from the live tab`, (t) => {
+    const text = liveWithFence(open, close, later);
+    const { f, s } = fakeHeading(t, text);
+    syncFolder(f.repo, s, NOW);
+    assert.equal(f.done(), null);
+    assert.match(f.tabs(), /More notes\./);
+    assert.match(f.tabs(), /- a\) \[x\] ~~one~~/);
+    const out = moveFinishedSections(text, "", { closedShortIds: new Set(["ddddddd"]), activeShortIds: new Set(["bbbbbbb"]), stateUnknown: false });
+    assert.deepEqual(out.moved, []);
+    assert.equal(out.tabs, text);
+  });
+}
+
+test("N5: the real section of the closed tab, later in the file, moves once with nothing duplicated", (t) => {
+  const real = FINISHED("ddddddd", 2);
+  const text = `${liveWithFence("```", "```", "```js")}\n${real}`;
+  const { f, s } = fakeHeading(t, text);
+  syncFolder(f.repo, s, NOW);
+  assert.equal(f.done(), `${DONE_HEADER}\n\n${real}`);
+  assert.match(f.tabs(), /More notes\./);
+  // (planFolder, which is not fence-aware, may renumber the example heading; its text stays.)
+  const [tabs, done] = [f.tabs(), f.done()];
+  assert.equal(syncFolder(f.repo, s, NOW), "unchanged");
+  assert.equal(f.tabs(), tabs);
+  assert.equal(f.done(), done);
+});
+
+test("with no fences at all, a closed finished tab still moves", (t) => {
+  const f = setup(t, `${LIVE}\n${FINISHED("ddddddd", 2)}`);
+  const s = state(
+    agent("bbbbbbb2", f.repo, { title: "Live", createdAt: "2026-10-24T09:00:00.000Z" }),
+    agent("ddddddd4", f.repo, { title: "Other", createdAt: "2026-10-24T10:00:00.000Z", archivedAt: LONG_AGO }),
+  );
+  syncFolder(f.repo, s, NOW);
+  assert.equal(f.done(), `${DONE_HEADER}\n\n${FINISHED("ddddddd", 2)}`);
+  assert.doesNotMatch(f.tabs(), /ddddddd/);
+});
