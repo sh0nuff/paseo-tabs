@@ -105,3 +105,75 @@ test("other statuses count as not busy", async () => {
   await sendWhenIdle(agent, "hi", { timers: f.timers, key: "t6" }).done;
   assert.deepEqual(agent.sent, ["hi"]);
 });
+
+test("tolerates three refresh failures in a row, then sends", async () => {
+  const f = fakeTimers();
+  const sent: string[] = [];
+  let calls = 0;
+  const agent: SenderAgent = {
+    status: null,
+    async refresh() {
+      calls++;
+      if (calls <= 3) throw new Error("offline");
+      agent.status = "idle";
+    },
+    async send(t) {
+      sent.push(t);
+    },
+  };
+  const h = sendWhenIdle(agent, "hi", { timers: f.timers, key: "t7" });
+  for (let i = 0; i < 4; i++) await f.tick();
+  await h.done;
+  assert.deepEqual(sent, ["hi"]);
+});
+
+test("a fourth consecutive refresh failure rejects done", async () => {
+  const f = fakeTimers();
+  const agent: SenderAgent = {
+    status: null,
+    async refresh() {
+      throw new Error("offline");
+    },
+    async send() {},
+  };
+  const h = sendWhenIdle(agent, "hi", { timers: f.timers, key: "t8" });
+  const failed = assert.rejects(h.done, /offline/);
+  for (let i = 0; i < 4; i++) await f.tick();
+  await failed;
+});
+
+test("a success resets the failure count", async () => {
+  const f = fakeTimers();
+  const seq = ["fail", "fail", "fail", "running", "fail", "fail", "fail", "idle"];
+  let i = 0;
+  const sent: string[] = [];
+  const agent: SenderAgent = {
+    status: null,
+    async refresh() {
+      const step = seq[i++];
+      if (step === "fail") throw new Error("offline");
+      agent.status = step;
+    },
+    async send(t) {
+      sent.push(t);
+    },
+  };
+  const h = sendWhenIdle(agent, "hi", { timers: f.timers, key: "t9" });
+  for (let n = 0; n < 9; n++) await f.tick();
+  await h.done;
+  assert.deepEqual(sent, ["hi"]);
+});
+
+test("send() rejecting rejects done", async () => {
+  const f = fakeTimers();
+  const agent: SenderAgent = {
+    status: null,
+    async refresh() {
+      agent.status = "idle";
+    },
+    async send() {
+      throw new Error("send failed");
+    },
+  };
+  await assert.rejects(sendWhenIdle(agent, "hi", { timers: f.timers, key: "t10" }).done, /send failed/);
+});

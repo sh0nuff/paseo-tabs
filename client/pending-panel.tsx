@@ -11,7 +11,8 @@ export function PendingPanel({ theme, layout, workspaceId, navigation }: PluginW
   const pick = useRpc(pendingPick);
   const search = useRpc(pendingSearch);
   const queryClient = useQueryClient();
-  const [queued, setQueued] = useState<Record<string, boolean>>({});
+  // "waiting": send queued for the tab. "sent": the message went out.
+  const [queued, setQueued] = useState<Record<string, "waiting" | "sent" | undefined>>({});
   const [failure, setFailure] = useState<string | null>(null);
   const [text, setText] = useState("");
   const term = text.trim();
@@ -73,18 +74,30 @@ export function PendingPanel({ theme, layout, workspaceId, navigation }: PluginW
   );
 
   const choose = async (card: PendingCard) => {
-    if (card.picked || queued[cardKey(card)]) return;
+    if (card.picked || queued[cardKey(card)] === "waiting") return;
     setFailure(null);
     try {
       // The RPC marks the item picked and returns the message; sending comes after.
       const { message } = await pick({ workspaceId, agentId: card.agentId, letter: card.letter });
-      setQueued((q) => ({ ...q, [cardKey(card)]: true }));
+      setQueued((q) => ({ ...q, [cardKey(card)]: "waiting" }));
       void queryClient.invalidateQueries({ queryKey: ["paseo-pending", workspaceId] });
-      const agent = paseo.agents.ref(card.agentId);
-      const sender = sendWhenIdle(agent, message, { key: workspaceId });
+      const ref = paseo.agents.ref(card.agentId);
+      // A handle's properties may be a snapshot, so read the status from current() after a refresh.
+      const adapter = {
+        status: null as string | null,
+        async refresh() {
+          await ref.refresh();
+          adapter.status = ref.current()?.status ?? null;
+        },
+        send: (body: string) => ref.send(body),
+      };
+      const sender = sendWhenIdle(adapter, message, { key: workspaceId });
       sender.done
-        .catch((error: unknown) => setFailure(error instanceof Error ? error.message : String(error)))
-        .finally(() => setQueued((q) => ({ ...q, [cardKey(card)]: false })));
+        .then(() => setQueued((q) => ({ ...q, [cardKey(card)]: q[cardKey(card)] === "waiting" ? "sent" : q[cardKey(card)] })))
+        .catch((error: unknown) => {
+          setFailure(error instanceof Error ? error.message : String(error));
+          setQueued((q) => ({ ...q, [cardKey(card)]: undefined }));
+        });
     } catch (error) {
       setFailure(error instanceof Error ? error.message : String(error));
     }
@@ -138,7 +151,7 @@ export function PendingPanel({ theme, layout, workspaceId, navigation }: PluginW
       {failure ? <Text style={styles.error}>{failure}</Text> : null}
       {items.length === 0 ? <Text style={styles.message}>No pending items</Text> : null}
       {items.map((card) => {
-        const waiting = !card.picked && queued[cardKey(card)] === true;
+        const waiting = queued[cardKey(card)] === "waiting";
         return (
           <Pressable
             key={cardKey(card)}
@@ -153,7 +166,7 @@ export function PendingPanel({ theme, layout, workspaceId, navigation }: PluginW
               <Text style={styles.line}>{`Action: ${card.action || "ask the tab"}`}</Text>
               <Text style={styles.line}>{`About ${card.minutes} min`}</Text>
               {card.why ? <Text style={styles.line}>{`Why: ${card.why}`}</Text> : null}
-              {card.picked ? <Text style={styles.state}>In progress</Text> : null}
+              {card.picked && !waiting ? <Text style={styles.state}>In progress</Text> : null}
               {waiting ? <Text style={styles.state}>Sent when the tab finishes</Text> : null}
             </View>
           </Pressable>

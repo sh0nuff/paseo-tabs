@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { displaySettings } from "../shared/settings.ts";
+import { PendingPanel } from "./pending-panel.tsx";
 import { statusColours } from "./palettes.ts";
 import { type TabRow, tabsList } from "../shared/tabs-rpc.ts";
 
@@ -15,7 +16,13 @@ function summary(tab: TabRow): string {
   return parts.length > 0 ? parts.join(" · ") : "Nothing open";
 }
 
-export function TabsPanel({ theme, layout, workspaceId, navigation }: PluginWorkspacePanelProps) {
+export function TabsPanel(props: PluginWorkspacePanelProps) {
+  const settings = useSettings(displaySettings);
+  if (settings.status === "ready" && settings.values.pendingStore) return <PendingPanel {...props} />;
+  return <TabsList {...props} />;
+}
+
+function TabsList({ theme, layout, workspaceId, navigation }: PluginWorkspacePanelProps) {
   const fetchTabs = useRpc(tabsList);
   const settings = useSettings(displaySettings);
   const dots = settings.status === "ready" ? settings.values.statusDots : true;

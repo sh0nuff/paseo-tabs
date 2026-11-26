@@ -115,7 +115,7 @@ export function SettingsScreen({ theme, layout }: PluginSurfaceProps) {
         />
         <SettingsSwitch
           label="Use the Pending panel instead of TABS.md"
-          hint="The Open Tabs command opens the Pending panel, which lists what waits on you as cards."
+          hint="When on, the Tabs panel shows the Pending panel instead."
           value={values.pendingStore}
           disabled={settings.saving}
           onValueChange={(pendingStore) => void save({ pendingStore })}

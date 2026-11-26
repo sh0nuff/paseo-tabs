@@ -35,7 +35,7 @@ const active = new Map<string, Sender>();
  * Sends text once the agent is not running. A send to a running agent
  * interrupts its turn, so this polls refresh() rather than relying on
  * subscriptions. Any status but "running" counts as free; null (unknown) keeps
- * polling until giveUpMs. A new call with the same key cancels the earlier one.
+ * polling until giveUpMs. Up to 3 consecutive refresh() failures are tolerated. A new call with the same key cancels the earlier one.
  */
 export function sendWhenIdle(agent: SenderAgent, text: string, options: SendOptions = {}): Sender {
   const key = options.key ?? "default";
@@ -48,6 +48,7 @@ export function sendWhenIdle(agent: SenderAgent, text: string, options: SendOpti
   let finished = false;
   let handle: unknown;
   let unknownMs = 0;
+  let failures = 0;
   let settle: () => void = () => {};
   let fail: (error: Error) => void = () => {};
   const done = new Promise<void>((resolve, reject) => {
@@ -78,7 +79,17 @@ export function sendWhenIdle(agent: SenderAgent, text: string, options: SendOpti
     handle = undefined;
     if (cancelled) return;
     try {
-      await agent.refresh();
+      try {
+        await agent.refresh();
+        failures = 0;
+      } catch (error) {
+        if (cancelled) return;
+        // A dropped connection is common and short; give up on the fourth in a row.
+        failures += 1;
+        if (failures > 3) throw error;
+        handle = timers.set(() => void poll(), interval);
+        return;
+      }
       if (cancelled) return;
       const status = agent.status;
       if (status === "running" || status === null) {
