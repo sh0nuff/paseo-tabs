@@ -511,15 +511,15 @@ test("withoutFinished drops expired ticked items", () => {
   );
 });
 
-test("drops the highest-lettered item too once it is ticked and expired", () => {
+test("keeps the highest-lettered item even when it is ticked and expired", () => {
   const body = "\n**Done**\n- a) [x] ~~one~~\n- b) [x] ~~two~~\n";
-  assert.equal(withoutFinished(body, new Set(["a", "b"])), "\n**Done**\n");
+  assert.equal(withoutFinished(body, new Set(["a", "b"])), "\n**Done**\n- b) [x] ~~two~~\n");
 });
 
 test("letters run a to z, then aa", () => {
   assert.deepEqual(["ab", "z", "aa", "b", "a"].sort(compareLetters), ["a", "b", "z", "aa", "ab"]);
   const body = "\n**Done**\n- y) [x] ~~y~~\n- aa) [x] ~~aa~~\n- z) [x] ~~z~~\n";
-  assert.equal(withoutFinished(body, new Set(["y", "z", "aa"])), "\n**Done**\n");
+  assert.equal(withoutFinished(body, new Set(["y", "z", "aa"])), "\n**Done**\n- aa) [x] ~~aa~~\n");
 });
 
 test("keeps a ticked item with lines indented under it, or with [ ] on its line", () => {
@@ -572,7 +572,7 @@ test("planFolder drops expired items, and a second pass changes nothing", () => 
   const pass = (text: string) =>
     renderFolder(planFolder(text, [agent("aaaaaaa1")], [ONE], NOW, DEFAULT_DISPLAY, undefined, () => new Set(["a", "b"])));
   const out = pass(FINISHED);
-  assert.equal(out, "## ✅ 1. A title · aaaaaaa\n\n**Waiting on you**\n- Nothing open.\n\n**Done**\n");
+  assert.equal(out, "## ✅ 1. A title · aaaaaaa\n\n**Waiting on you**\n- Nothing open.\n\n**Done**\n- b) [x] ~~two~~\n");
   assert.equal(pass(out), out);
 });
 
@@ -601,9 +601,9 @@ test("a fence closes only on the same kind of fence", () => {
   assert.equal(withoutFinished(body, new Set(["b"])), body);
 });
 
-test("items in a code block or a comment are never removed", () => {
+test("a letter inside a code block or a comment never counts as the section's highest", () => {
   const lines = ["", "**Done**", "- a) [x] ~~first~~", "- b) [x] ~~second~~", "", "```", "- y) [ ] example", "```", "", "<!--", "- z) [ ] example", "-->", ""];
-  const expected = ["", "**Done**", "", "```", "- y) [ ] example", "```", "", "<!--", "- z) [ ] example", "-->", ""];
+  const expected = ["", "**Done**", "- b) [x] ~~second~~", "", "```", "- y) [ ] example", "```", "", "<!--", "- z) [ ] example", "-->", ""];
   assert.equal(withoutFinished(lines.join("\n"), new Set(["a", "b"])), expected.join("\n"));
 });
 
@@ -627,4 +627,10 @@ test("latest message first counts closed tabs whose sections are gone", () => {
   const out = renderFolder(planFolder("", agents, workspaces, NOW, options));
   assert.doesNotMatch(out, /ccccccc/);
   assert.deepEqual(groupLines(out), ["# One · 1111111", "# Two · 2222222"]);
+});
+
+test("plain lettered lines can't take the newest item's place", () => {
+  const about = ["", "### About this tab", "Two ways to do it:", "- x) one", "- y) two", ""];
+  const body = [...about, "**Done**", "- a) [x] ~~first~~", "- b) [x] ~~second~~", ""].join("\n");
+  assert.equal(withoutFinished(body, new Set(["a", "b"])), [...about, "**Done**", "- b) [x] ~~second~~", ""].join("\n"));
 });

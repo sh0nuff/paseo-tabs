@@ -4,7 +4,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentRecord, PaseoState } from "../server/paseo-state.ts";
 import { type FileIO, syncFolder } from "../server/folder-sync.ts";
-import { ItemClock, nextLetter } from "../server/item-clock.ts";
+import { ItemClock, highestBoxedLetter, nextLetter } from "../server/item-clock.ts";
 import { DEFAULT_DISPLAY, TICKED_KEEP_MS, planFolder, renderFolder } from "../server/tabs-file.ts";
 import { DONE_HEADER, moveFinishedSections } from "../server/tabs-done.ts";
 import { NOW, gitInit, tempDir } from "./helpers.ts";
@@ -142,19 +142,91 @@ test("test_revived_tab_section_returns", (t) => {
   assert.equal(syncFolder(f.repo, s, NOW), "unchanged");
 });
 
-test("a revived tab that is also still in TABS.md is just removed from the done file", () => {
-  const out = moveFinishedSections(
-    "## 1. Shut · aaaaaaa\n\nlive\n",
-    `${DONE_HEADER}\n\n${FINISHED("aaaaaaa")}`,
-    { closedShortIds: new Set(), activeShortIds: new Set(["aaaaaaa"]), stateUnknown: false },
-  );
-  assert.equal(out.tabs, "## 1. Shut · aaaaaaa\n\nlive\n");
+test("a revived tab whose section is identical in both files is just dropped from the done file", () => {
+  const live = FINISHED("aaaaaaa").replace("· closed", "").replace("1. Shut ", "1. Shut ");
+  const out = moveFinishedSections(live, `${DONE_HEADER}\n\n${FINISHED("aaaaaaa")}`, {
+    closedShortIds: new Set(),
+    activeShortIds: new Set(["aaaaaaa"]),
+    stateUnknown: false,
+  });
+  assert.equal(out.tabs, live);
   assert.doesNotMatch(out.done, /aaaaaaa/);
+});
+
+test("a revived tab that wrote again keeps its history in the done file", () => {
+  const live = "## 1. Shut · aaaaaaa\n\n**Waiting on you**\n- a) [ ] new question\n";
+  const doneText = `${DONE_HEADER}\n\n${FINISHED("aaaaaaa").replace("- a) [x] ~~one~~", "- a) [x] ~~one~~\n- b) [x] ~~two~~")}`;
+  const out = moveFinishedSections(live, doneText, { closedShortIds: new Set(), activeShortIds: new Set(["aaaaaaa"]), stateUnknown: false });
+  assert.equal(out.tabs, live);
+  assert.equal(out.done, doneText);
+  assert.deepEqual(out.returned, []);
+});
+
+test("after a crash the newer TABS.md copy replaces the older done copy", (t) => {
+  const newer = `${FINISHED("aaaaaaa")}- b) [x] ~~two~~\n`;
+  const f = setup(t, newer, `${DONE_HEADER}\n\n${FINISHED("aaaaaaa")}`);
+  syncFolder(f.repo, state(agent("aaaaaaa1", f.repo, { archivedAt: LONG_AGO })), NOW);
+  assert.doesNotMatch(f.tabs(), /aaaaaaa/);
+  assert.equal(f.done(), `${DONE_HEADER}\n\n${newer}`);
+});
+
+test("a heading line inside a closed section does not cut it in two", (t) => {
+  const text = `${FINISHED("aaaaaaa")}\n## Notes\n- b) [ ] still open\n`;
+  const f = setup(t, text);
+  syncFolder(f.repo, state(agent("aaaaaaa1", f.repo, { archivedAt: LONG_AGO })), NOW);
+  assert.equal(f.tabs(), text);
+  assert.equal(f.done(), null);
+});
+
+test("a heading line inside a code fence does not cut a section in two", (t) => {
+  const text = `${FINISHED("aaaaaaa")}\n\`\`\`\n## Example\n- c) [ ] shown in a fence\n\`\`\`\n`;
+  const f = setup(t, text);
+  syncFolder(f.repo, state(agent("aaaaaaa1", f.repo, { archivedAt: LONG_AGO })), NOW);
+  // The section stays, the open item with it. (planFolder's own heading split, which is not
+  // fence-aware, may add a blank line, so the text is not compared exactly.)
+  assert.match(f.tabs(), /^## 1\. Shut · aaaaaaa · closed$/m);
+  assert.match(f.tabs(), /- c\) \[ \] shown in a fence/);
+  assert.equal(f.done(), null);
+  // And a finished section with such lines moves whole.
+  const whole = `${FINISHED("bbbbbbb")}\n## Notes\n- Nothing more.\n`;
+  const g = setup(t, whole);
+  syncFolder(g.repo, state(agent("bbbbbbb2", g.repo, { archivedAt: LONG_AGO })), NOW);
+  assert.equal(g.tabs(), "");
+  assert.equal(g.done(), `${DONE_HEADER}\n\n${whole}`);
+});
+
+test("a short ID that appears twice in TABS.md moves once and leaves the duplicate", () => {
+  const out = moveFinishedSections(`${FINISHED("aaaaaaa", 1)}\n${FINISHED("aaaaaaa", 2)}`, "", {
+    closedShortIds: new Set(["aaaaaaa"]),
+    activeShortIds: new Set(),
+    stateUnknown: false,
+  });
+  assert.deepEqual(out.moved, ["aaaaaaa"]);
+  assert.match(out.tabs, /^## 2\. Shut · aaaaaaa · closed$/m);
+  assert.doesNotMatch(out.tabs, /^## 1\./m);
+});
+
+test("TABS-DONE.md is read again before it is written", (t) => {
+  const f = setup(t, FINISHED("aaaaaaa"));
+  let reads = 0;
+  const io: FileIO = {
+    read: (path) => {
+      if (!path.endsWith("TABS-DONE.md")) return readFileSync(path, "utf8");
+      // The first reads see no file. The read before writing finds that a tab made one.
+      return ++reads >= 3 ? `${DONE_HEADER}\n\n${FINISHED("ccccccc")}` : null;
+    },
+    write: (path, text) => writeFileSync(path, text),
+    exclude: () => {},
+  };
+  syncFolder(f.repo, state(agent("aaaaaaa1", f.repo, { archivedAt: LONG_AGO })), NOW, io);
+  // The tab's file was not overwritten: the pass planned again from the newer text.
+  assert.equal(f.done(), `${DONE_HEADER}\n\n${FINISHED("aaaaaaa")}\n${FINISHED("ccccccc")}`);
+  assert.doesNotMatch(f.tabs(), /aaaaaaa/);
 });
 
 const ticked = (...letters: string[]) => `\n**Done**\n${letters.map((l) => `- ${l}) [x] ~~item ${l}~~`).join("\n")}\n`;
 
-test("test_highest_letter_kept_in_state_not_in_file", (t) => {
+test("test_highest_letter_stays_in_file_and_is_recorded_in_state", (t) => {
   const path = join(tempDir(t), "items.json");
   const clock = new ItemClock(path);
   const agents = [agent("aaaaaaa1", "/repo")];
@@ -164,25 +236,38 @@ test("test_highest_letter_kept_in_state_not_in_file", (t) => {
       planFolder(text, agents, [], at, DEFAULT_DISPLAY, undefined, (short, body) => clock.expiredTicks(short, body, at, TICKED_KEEP_MS)),
     );
   pass(section, NOW);
-  const later = new Date(NOW.getTime() + TICKED_KEEP_MS + 1000);
-  const out = pass(section, later);
-  assert.doesNotMatch(out, /\[x\]/); // the last ticked item left the file too
+  const out = pass(section, new Date(NOW.getTime() + TICKED_KEEP_MS + 1000));
+  // The file keeps the highest item, as agents rely on it. The state records it as well.
+  assert.match(out, /- b\) \[x\]/);
+  assert.doesNotMatch(out, /- a\) \[x\]/);
   clock.save();
-  assert.equal(new ItemClock(path).highestLetter("aaaaaaa", out), "b");
+  assert.equal(new ItemClock(path).highestLetter("aaaaaaa", "\n**Done**\n"), "b");
 });
 
 test("test_next_letter_not_reused_after_last_item_leaves", () => {
   const clock = new ItemClock(null);
-  const at = NOW;
-  clock.expiredTicks("aaaaaaa", ticked("a", "b", "c"), at, TICKED_KEEP_MS);
-  const emptied = "\n**Done**\n";
-  assert.equal(clock.nextLetter("aaaaaaa", emptied), "d");
+  clock.expiredTicks("aaaaaaa", ticked("a", "b", "c"), NOW, TICKED_KEEP_MS);
+  // The state alone, with the section emptied by hand, still gives a fresh letter.
+  assert.equal(clock.nextLetter("aaaaaaa", "\n**Done**\n"), "d");
   // Whichever is higher wins, the file's or the state's.
   assert.equal(clock.nextLetter("aaaaaaa", "\n- f) [ ] later\n"), "g");
-  assert.equal(clock.nextLetter("bbbbbbb", emptied), "a");
+  assert.equal(clock.nextLetter("bbbbbbb", "\n**Done**\n"), "a");
   assert.equal(nextLetter("z"), "aa");
   assert.equal(nextLetter("az"), "ba");
   assert.equal(nextLetter(undefined), "a");
+});
+
+test("the next letter read from the file alone is not reused after expiry", () => {
+  const clock = new ItemClock(null);
+  const agents = [agent("aaaaaaa1", "/repo")];
+  const section = `## 1. Shut · aaaaaaa\n${ticked("a", "b", "c")}`;
+  const pass = (text: string, at: Date) =>
+    renderFolder(
+      planFolder(text, agents, [], at, DEFAULT_DISPLAY, undefined, (short, body) => clock.expiredTicks(short, body, at, TICKED_KEEP_MS)),
+    );
+  pass(section, NOW);
+  const out = pass(section, new Date(NOW.getTime() + TICKED_KEEP_MS + 1000));
+  assert.equal(nextLetter(highestBoxedLetter(out)), "d");
 });
 
 test("test_done_file_git_excluded", (t) => {

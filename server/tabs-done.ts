@@ -7,7 +7,7 @@
 // does the writing, in an order that can duplicate a section on a crash but
 // never lose one.
 
-import { GROUP_LINE, TAB_HEADING, hasOpenItems } from "./tabs-file.ts";
+import { GROUP_LINE, TAB_HEADING, hasOpenItems, hiddenLines } from "./tabs-file.ts";
 
 export const DONE_FILE = "TABS-DONE.md";
 export const DONE_HEADER = "# Finished tabs (moved from TABS.md)";
@@ -35,21 +35,30 @@ interface Block {
   lines: string[];
 }
 
-/** Splits text into its preamble lines and one block of lines per heading, losing nothing. */
+/**
+ * Splits text into its preamble lines and one block of lines per tab heading or group
+ * line, losing nothing. A "## " line that is not a tab heading, and any line inside a
+ * code block or comment, belongs to the block before it, so a section is never cut in
+ * two: it moves or stays whole, and an open item anywhere in it keeps all of it.
+ */
 function blocks(text: string): { preamble: string[]; blocks: Block[] } {
   const lines = text.split("\n");
-  const starts: number[] = [];
+  const hidden = hiddenLines(lines);
+  const preamble: string[] = [];
+  const out: Block[] = [];
   lines.forEach((line, index) => {
-    if (line.startsWith("## ") || GROUP_LINE.test(line)) starts.push(index);
+    const tab = hidden[index] ? null : TAB_HEADING.exec(line);
+    const group = !hidden[index] && GROUP_LINE.test(line);
+    const stray = !hidden[index] && line.startsWith("## ") && !tab && out.length === 0;
+    if (tab || group || stray) {
+      out.push({ short: tab?.[2] ?? null, lines: [line] });
+    } else if (out.length === 0) {
+      preamble.push(line);
+    } else {
+      out[out.length - 1].lines.push(line);
+    }
   });
-  if (starts.length === 0) return { preamble: lines, blocks: [] };
-  return {
-    preamble: lines.slice(0, starts[0]),
-    blocks: starts.map((start, n) => {
-      const part = lines.slice(start, n + 1 < starts.length ? starts[n + 1] : lines.length);
-      return { short: TAB_HEADING.exec(part[0])?.[2] ?? null, lines: part };
-    }),
-  };
+  return { preamble, blocks: out };
 }
 
 function trimmed(lines: string[]): string[] {
@@ -66,21 +75,28 @@ function bodyOf(block: Block): string {
   return block.lines.slice(1).join("\n");
 }
 
+// Headings are compared by nothing: the plugin may have rewritten the dot or the number since.
+const sameText = (a: Block, b: Block) => trimmed(a.lines.slice(1)).join("\n") === trimmed(b.lines.slice(1)).join("\n");
+
 export function moveFinishedSections(tabsText: string, doneText: string, ctx: MoveContext): MoveResult {
   const tabs = blocks(tabsText);
   const done = blocks(doneText);
   const moved: string[] = [];
   const returned: string[] = [];
-  const doneIds = new Set(done.blocks.flatMap((block) => block.short ?? []));
-  const tabsIds = new Set(tabs.blocks.flatMap((block) => block.short ?? []));
+  const firstInTabs = new Map<string, Block>();
+  for (const block of tabs.blocks) if (block.short !== null && !firstInTabs.has(block.short)) firstInTabs.set(block.short, block);
 
-  // Sections leaving TABS.md. One already in TABS-DONE.md, say after a crash, is not added twice.
+  // Sections leaving TABS.md. Only the first block of a short ID moves. If TABS-DONE.md
+  // already has the ID, say after a crash, the copy from TABS.md replaces it: it is the
+  // live one, so the newer.
   const leaving: Block[] = [];
   const kept: Block[] = [];
+  const taken = new Set<string>();
   for (const block of tabs.blocks) {
     const movable =
       !ctx.stateUnknown &&
       block.short !== null &&
+      firstInTabs.get(block.short) === block &&
       ctx.closedShortIds.has(block.short) &&
       !ctx.activeShortIds.has(block.short) &&
       !hasOpenItems(bodyOf(block));
@@ -89,19 +105,29 @@ export function moveFinishedSections(tabsText: string, doneText: string, ctx: Mo
       continue;
     }
     moved.push(block.short as string);
-    if (!doneIds.has(block.short as string)) leaving.push(block);
+    taken.add(block.short as string);
+    leaving.push(block);
   }
 
-  // Sections coming back: their tab is active again.
+  // Sections coming back: their tab is active again. A copy TABS.md already has is
+  // dropped only if it is identical. If the tab has written since, the history stays.
   const stayingDone: Block[] = [];
   const coming: Block[] = [];
   for (const block of done.blocks) {
+    if (block.short !== null && taken.has(block.short)) continue; // replaced by the live copy
+    const live = block.short === null ? undefined : firstInTabs.get(block.short);
     if (!ctx.stateUnknown && block.short !== null && ctx.activeShortIds.has(block.short)) {
-      returned.push(block.short);
-      if (!tabsIds.has(block.short)) coming.push(block);
-    } else {
-      stayingDone.push(block);
+      if (live === undefined) {
+        returned.push(block.short);
+        coming.push(block);
+        continue;
+      }
+      if (sameText(live, block)) {
+        returned.push(block.short);
+        continue;
+      }
     }
+    stayingDone.push(block);
   }
 
   const rebuiltTabs = [...tabs.preamble, ...kept.flatMap((block) => block.lines)];

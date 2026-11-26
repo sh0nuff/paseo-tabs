@@ -108,18 +108,22 @@ export function syncFolder(
     if (next === current && !doneChanged) return "unchanged";
     // A tab may have written to the file while this pass was planning.
     // Write only if the file still holds the text the plan was made from.
+    // TABS-DONE.md gets the same check, so nothing written to it in the meantime is lost.
     const latest = io.read(path);
-    if (latest !== current) {
+    if (latest !== current || (io.read(donePath) ?? "") !== done) {
       current = latest;
       continue;
     }
     // Two files cannot be written at once, so the order decides what a crash between
     // them costs. Moving out: TABS-DONE.md first, so a crash leaves the section in
     // both files. Moving back: TABS.md first, for the same reason.
-    const writeDone = () => {
-      if (!doneChanged) return;
+    const writeDone = (): boolean => {
+      if (!doneChanged) return true;
+      // Read again immediately before writing, as for TABS.md.
+      if ((io.read(donePath) ?? "") !== done) return false;
       io.write(donePath, moves.done);
       exclude(DONE_FILE);
+      return true;
     };
     const writeTabs = () => {
       if (next === current) return;
@@ -130,9 +134,14 @@ export function syncFolder(
     };
     if (reviving) {
       writeTabs();
+      // If TABS-DONE.md changed meanwhile it is left alone. Its copy of the section stays
+      // until the next pass, which a change to either file starts.
       writeDone();
     } else {
-      writeDone();
+      if (!writeDone()) {
+        current = latest;
+        continue;
+      }
       writeTabs();
     }
     return creating ? "created" : "updated";
