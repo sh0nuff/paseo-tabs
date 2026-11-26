@@ -1,6 +1,7 @@
 import type { PluginServerContext } from "@getpaseo/plugin/server";
 import { ItemClock, clockPath } from "./server/item-clock.ts";
 import { paseoHome } from "./server/paseo-state.ts";
+import { pendingListHandler, pendingPickHandler, pendingSearchHandler } from "./server/pending-rpc.ts";
 import { pendingDir } from "./server/pending-store.ts";
 import { pendingTools } from "./server/pending-tools.ts";
 import { DEFAULT_DISPLAY, type DisplayOptions } from "./server/tabs-file.ts";
@@ -8,6 +9,7 @@ import { cachedFor, workspaceLines } from "./server/tabs-lines.ts";
 import { listTabs } from "./server/tabs-list.ts";
 import { type Watcher, startWatcher } from "./server/watcher.ts";
 import { displaySettings } from "./shared/settings.ts";
+import { pendingList, pendingPick, pendingSearch } from "./shared/pending-rpc.ts";
 import { tabsLines, tabsList } from "./shared/tabs-rpc.ts";
 
 export default function contribute(server: PluginServerContext) {
@@ -52,6 +54,10 @@ export default function contribute(server: PluginServerContext) {
   // Every sidebar row asks for its line, so the answer is worked out at most every 2 seconds.
   const lines = cachedFor(2000, () => workspaceLines(home, new Date(), display, clock));
   server.handle(tabsLines, () => ({ lines: lines() }));
+  const store = pendingDir(process.env);
+  server.handle(pendingList, ({ workspaceId }) => pendingListHandler(store, workspaceId));
+  server.handle(pendingPick, ({ workspaceId, agentId, letter }) => pendingPickHandler(store, workspaceId, agentId, letter, new Date()));
+  server.handle(pendingSearch, ({ query }) => pendingSearchHandler(store, home, query));
   return () => {
     stopped = true;
     unsubscribe();

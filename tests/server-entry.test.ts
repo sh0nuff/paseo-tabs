@@ -57,6 +57,7 @@ test("the plugin entry applies saved settings and serves tabs.list", async (t) =
     else process.env.XDG_STATE_HOME = previousState;
   });
   await sleep(20);
+  for (const name of ["pending.list", "pending.pick", "pending.search"]) assert.ok(handlers.has(name), name);
   assert.match(readFileSync(join(repo, "TABS.md"), "utf8"), /^## 🟠 1\. A title · aaaaaaa$/m);
   assert.deepEqual(await handlers.get("tabs.lines")!({}), {
     lines: { wks_1111111aaaaaaa: { status: "waiting", title: "A title", waiting: "answer", more: 0 } },

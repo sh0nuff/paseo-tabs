@@ -1,0 +1,57 @@
+// Handlers behind the Pending panel's RPCs. The store directory and Paseo home
+// are parameters so tests can point them at temp dirs.
+
+import type { PendingCard } from "../shared/pending-rpc.ts";
+import { loadState } from "./paseo-state.ts";
+import { allFiles, readPending, setPicked, type PendingItem } from "./pending-store.ts";
+
+function toCard(item: PendingItem): PendingCard {
+  const { agentId, letter, what, action, minutes, why, picked, status } = item;
+  return { agentId, letter, what, action, minutes, why, picked, status };
+}
+
+function sentence(text: string, fallback: string): string {
+  const t = text.trim() || fallback;
+  return t.replace(/\.+$/, "");
+}
+
+export function pickMessage(card: PendingCard): string {
+  return (
+    `Picked from the panel: ${sentence(card.what, "untitled")}. ` +
+    `Action: ${sentence(card.action, "ask the tab")}. ` +
+    `About ${card.minutes} min. ` +
+    `Why: ${sentence(card.why, "not given")}. (item ${card.letter})`
+  );
+}
+
+function byCreated(a: PendingItem, b: PendingItem): number {
+  return Date.parse(a.created) - Date.parse(b.created);
+}
+
+function openWaiting(items: PendingItem[]): PendingItem[] {
+  return items.filter((i) => i.kind === "waiting" && i.status === "open").sort(byCreated);
+}
+
+export function pendingListHandler(dir: string, workspaceId: string): { items: PendingCard[] } {
+  return { items: openWaiting(readPending(dir, workspaceId).items).map(toCard) };
+}
+
+export function pendingPickHandler(dir: string, workspaceId: string, agentId: string, letter: string, now: Date): { message: string } {
+  const item = setPicked(dir, workspaceId, agentId, letter, now);
+  return { message: pickMessage(toCard(item)) };
+}
+
+export function pendingSearchHandler(dir: string, home: string, query: string) {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return { hits: [] };
+  const names = new Map(loadState(home).workspaces.map((w) => [w.id, w.title ?? w.id]));
+  const hits = [];
+  for (const file of allFiles(dir)) {
+    for (const item of openWaiting(file.items)) {
+      if ([item.what, item.action, item.why].some((f) => f.toLowerCase().includes(needle))) {
+        hits.push({ workspaceId: file.workspaceId, workspaceName: names.get(file.workspaceId) ?? file.workspaceId, card: toCard(item) });
+      }
+    }
+  }
+  return { hits };
+}
