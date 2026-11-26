@@ -35,29 +35,35 @@ interface Block {
   lines: string[];
 }
 
+const isHeading = (line: string) => TAB_HEADING.test(line) || GROUP_LINE.test(line);
+
+/** True if the lines end inside a code fence or an HTML comment that never closes. */
+function endsHidden(lines: string[]): boolean {
+  return hiddenLines([...lines, "plain"]).at(-1) === true;
+}
+
 /**
  * Splits text into its preamble lines and one block of lines per tab heading or group
- * line, losing nothing. A "## " line that is not a tab heading, and any line inside a
- * code block or comment, belongs to the block before it, so a section is never cut in
- * two: it moves or stays whole, and an open item anywhere in it keeps all of it.
+ * line, losing nothing. A tab heading or group line always starts a block, even inside
+ * what looks like a code fence or comment, so an unclosed fence cannot reach the next
+ * block. A "## " line that is not a tab heading, and any line inside a code block or
+ * comment, belongs to the block before it, so a section is never cut in two.
  */
 function blocks(text: string): { preamble: string[]; blocks: Block[] } {
   const lines = text.split("\n");
-  const hidden = hiddenLines(lines);
-  const preamble: string[] = [];
-  const out: Block[] = [];
-  lines.forEach((line, index) => {
-    const tab = hidden[index] ? null : TAB_HEADING.exec(line);
-    const group = !hidden[index] && GROUP_LINE.test(line);
-    const stray = !hidden[index] && line.startsWith("## ") && !tab && out.length === 0;
-    if (tab || group || stray) {
-      out.push({ short: tab?.[2] ?? null, lines: [line] });
-    } else if (out.length === 0) {
-      preamble.push(line);
-    } else {
-      out[out.length - 1].lines.push(line);
-    }
-  });
+  const chunks: string[][] = [[]];
+  for (const line of lines) {
+    if (isHeading(line)) chunks.push([line]);
+    else chunks[chunks.length - 1].push(line);
+  }
+  const preamble = [...chunks[0]];
+  const out: Block[] = chunks.slice(1).map((chunk) => ({ short: TAB_HEADING.exec(chunk[0])?.[2] ?? null, lines: chunk }));
+  // A stray "## " line before any heading starts a block of its own, as it always has.
+  const hidden = hiddenLines(preamble);
+  const stray = preamble.findIndex((line, index) => !hidden[index] && line.startsWith("## "));
+  if (stray !== -1) {
+    out.unshift({ short: null, lines: preamble.splice(stray) });
+  }
   return { preamble, blocks: out };
 }
 
@@ -99,7 +105,10 @@ export function moveFinishedSections(tabsText: string, doneText: string, ctx: Mo
       firstInTabs.get(block.short) === block &&
       ctx.closedShortIds.has(block.short) &&
       !ctx.activeShortIds.has(block.short) &&
-      !hasOpenItems(bodyOf(block));
+      !hasOpenItems(bodyOf(block)) &&
+      // Leave alone a block that ends inside a fence or comment that never closes: its
+      // text may not be what it seems.
+      !endsHidden(block.lines);
     if (!movable) {
       kept.push(block);
       continue;

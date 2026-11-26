@@ -102,7 +102,7 @@ export function syncFolder(
     // the same pass. The next pass, started by this file changing, does the moving.
     let moves = moveFinishedSections(current ?? "", done, { closedShortIds: new Set(), activeShortIds, stateUnknown });
     const reviving = moves.returned.length > 0;
-    if (!reviving) moves = moveFinishedSections(current ?? "", done, { closedShortIds, activeShortIds: new Set(), stateUnknown });
+    if (!reviving) moves = moveFinishedSections(current ?? "", done, { closedShortIds, activeShortIds, stateUnknown });
     const next = renderFolder(planFolder(moves.tabs, agents, state.workspaces, now, display, overdueOf, expiredOf));
     const doneChanged = moves.done !== done;
     if (next === current && !doneChanged) return "unchanged";

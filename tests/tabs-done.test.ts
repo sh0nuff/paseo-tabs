@@ -277,3 +277,59 @@ test("test_done_file_git_excluded", (t) => {
   assert.ok(lines.includes("TABS-DONE.md"));
   assert.ok(lines.includes("TABS.md"));
 });
+
+const LIVE = "## 1. Live · bbbbbbb\n\n### About this tab\nLive tab text.\n\n**Done**\n- a) [x] ~~one~~\n";
+
+function twoTabs(t: { after: (fn: () => void) => void }, tail: string, second: string) {
+  const text = `${FINISHED("aaaaaaa", 2)}${tail}\n${second}`;
+  const f = setup(t, text);
+  const s = state(
+    agent("aaaaaaa1", f.repo, { archivedAt: LONG_AGO }),
+    agent("bbbbbbb2", f.repo, { title: "Live", createdAt: "2026-10-24T10:00:00.000Z", archivedAt: second === LIVE ? null : LONG_AGO }),
+  );
+  return { f, s };
+}
+
+for (const [name, tail] of [
+  ["``` fence", "\n```\nunclosed example\n"],
+  ["<!-- comment", "\n<!--\nunclosed note\n"],
+] as const) {
+  test(`an unclosed ${name} in a finished closed section does not swallow the live tab after it`, (t) => {
+    const { f, s } = twoTabs(t, tail, LIVE);
+    syncFolder(f.repo, s, NOW);
+    assert.match(f.tabs(), /Live tab text\./);
+    assert.match(f.tabs(), /aaaaaaa/); // backstop: left in TABS.md
+    assert.equal(f.done(), null);
+    const after = f.tabs();
+    assert.equal(syncFolder(f.repo, s, NOW), "unchanged");
+    assert.equal(f.tabs(), after);
+  });
+
+  test(`an unclosed ${name} followed by a closed finished tab loses nothing`, (t) => {
+    const second = FINISHED("bbbbbbb", 1);
+    const { f, s } = twoTabs(t, tail, second);
+    syncFolder(f.repo, s, NOW);
+    const everything = `${f.tabs()}${f.done() ?? ""}`;
+    assert.match(everything, /aaaaaaa/);
+    assert.match(everything, /bbbbbbb/);
+    // The section with the unclosed fence stays; the other, properly ended, may move.
+    assert.match(f.tabs(), /aaaaaaa/);
+    assert.doesNotMatch(f.done() ?? "", /aaaaaaa/);
+  });
+}
+
+test("blocks split at a tab heading even inside a hidden region, pure", () => {
+  const text = `${FINISHED("aaaaaaa", 2)}\n\`\`\`\nunclosed\n\n${LIVE}`;
+  const out = moveFinishedSections(text, "", { closedShortIds: new Set(["aaaaaaa"]), activeShortIds: new Set(["bbbbbbb"]), stateUnknown: false });
+  assert.deepEqual(out.moved, []);
+  assert.equal(out.tabs, text);
+});
+
+test("a tab active in Paseo is never moved, even if its block was mis-split", () => {
+  const out = moveFinishedSections(FINISHED("aaaaaaa"), "", {
+    closedShortIds: new Set(["aaaaaaa"]),
+    activeShortIds: new Set(["aaaaaaa"]),
+    stateUnknown: false,
+  });
+  assert.deepEqual(out.moved, []);
+});
