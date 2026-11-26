@@ -37,7 +37,11 @@ export function syncAll(
   if (clock) {
     // Forget only tabs Paseo no longer has, so a folder skipped or busy this pass keeps its clocks.
     // An empty list more likely means Paseo's files could not be read than that every tab is gone.
-    if (state.agents.length > 0) clock.prune(new Set(state.agents.map((agent) => shortAgentId(agent.id))));
+    if (state.agents.length > 0) {
+      const present = new Set(state.agents.map((agent) => shortAgentId(agent.id)));
+      clock.prune(present);
+      clock.pruneLetters(present);
+    }
     try {
       clock.save();
     } catch (error) {

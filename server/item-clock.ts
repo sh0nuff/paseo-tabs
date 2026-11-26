@@ -11,7 +11,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { hiddenLines, isOpenItem } from "./tabs-file.ts";
+import { BOXED, compareLetters, hiddenLines, isOpenItem } from "./tabs-file.ts";
 
 const DAY_MS = 24 * 3600 * 1000;
 const LABEL = /^\*\*.+\*\*\s*$/;
@@ -68,6 +68,27 @@ export function tickedLetters(body: string): string[] {
   return [...letters];
 }
 
+/** The letter after the given one: a to z, then aa, ab, and so on. No letter yet gives "a". */
+export function nextLetter(highest: string | undefined): string {
+  if (!highest) return "a";
+  const digits = [...highest].map((c) => c.charCodeAt(0) - 96);
+  let i = digits.length - 1;
+  while (i >= 0 && digits[i] === 26) digits[i--] = 1;
+  if (i < 0) digits.unshift(1);
+  else digits[i]++;
+  return digits.map((d) => String.fromCharCode(d + 96)).join("");
+}
+
+/** The highest letter among a section's boxed items, leaving out code blocks and comments. */
+export function highestBoxedLetter(body: string): string | undefined {
+  const lines = body.split("\n");
+  const hidden = hiddenLines(lines);
+  return lines
+    .flatMap((line, index) => (hidden[index] ? [] : BOXED.exec(line)?.[1] ?? []))
+    .sort(compareLetters)
+    .at(-1);
+}
+
 interface Entry {
   text: string;
   since: string;
@@ -77,16 +98,18 @@ interface Saved {
   items: Record<string, Entry>;
   /** When each finished item was first seen ticked, keyed "<short>:<letter>". */
   ticked: Record<string, string>;
+  /** Each short ID's highest item letter ever seen, so a letter is never reused once its item has left. */
+  highest: Record<string, string>;
 }
 
 function readSaved(path: string): Saved {
-  let parsed: { items?: unknown; ticked?: unknown } | null;
+  let parsed: { items?: unknown; ticked?: unknown; highest?: unknown } | null;
   try {
     parsed = JSON.parse(readFileSync(path, "utf8"));
   } catch {
-    return { items: {}, ticked: {} }; // first run, or an unreadable file: every item starts fresh
+    return { items: {}, ticked: {}, highest: {} }; // first run, or an unreadable file: every item starts fresh
   }
-  const saved: Saved = { items: {}, ticked: {} };
+  const saved: Saved = { items: {}, ticked: {}, highest: {} };
   const items = parsed?.items;
   if (typeof items === "object" && items !== null) {
     for (const [key, entry] of Object.entries(items)) {
@@ -103,6 +126,12 @@ function readSaved(path: string): Saved {
       if (typeof since === "string" && !Number.isNaN(Date.parse(since))) saved.ticked[key] = since;
     }
   }
+  const highest = parsed?.highest;
+  if (typeof highest === "object" && highest !== null) {
+    for (const [key, letter] of Object.entries(highest)) {
+      if (typeof letter === "string" && /^[a-z]+$/.test(letter)) saved.highest[key] = letter;
+    }
+  }
   return saved;
 }
 
@@ -110,14 +139,36 @@ export class ItemClock {
   private readonly path: string | null;
   private readonly entries: Record<string, Entry>;
   private readonly ticked: Record<string, string>;
+  private readonly highest: Record<string, string>;
   private dirty = false;
 
   /** With no path the clock lives in memory only. */
   constructor(path: string | null) {
     this.path = path;
-    const saved = path ? readSaved(path) : { items: {}, ticked: {} };
+    const saved = path ? readSaved(path) : { items: {}, ticked: {}, highest: {} };
     this.entries = saved.items;
     this.ticked = saved.ticked;
+    this.highest = saved.highest;
+  }
+
+  /** Remembers the highest item letter in the tab's section, if it beats the one remembered. */
+  private noteLetters(short: string, body: string): void {
+    const letter = highestBoxedLetter(body);
+    const known = this.highest[short];
+    if (letter && (!known || compareLetters(letter, known) > 0)) {
+      this.highest[short] = letter;
+      this.dirty = true;
+    }
+  }
+
+  /** The highest letter the tab has used: the greater of its section's and the remembered one. */
+  highestLetter(short: string, body: string): string | undefined {
+    return [highestBoxedLetter(body), this.highest[short]].filter((l): l is string => !!l).sort(compareLetters).at(-1);
+  }
+
+  /** The letter a new item in the tab's section takes, after every letter used so far. */
+  nextLetter(short: string, body: string): string {
+    return nextLetter(this.highestLetter(short, body));
   }
 
   /** Records the tab's current waiting items and returns how many are overdue. A limit of 0 means never. */
@@ -125,6 +176,7 @@ export class ItemClock {
     const prefix = `${short}:`;
     const current = new Set<string>();
     let overdue = 0;
+    this.noteLetters(short, body);
     for (const item of waitingItems(body)) {
       const key = prefix + item.key;
       current.add(key);
@@ -163,6 +215,7 @@ export class ItemClock {
   /** Records the tab's ticked items and returns the letters ticked for longer than keepMs. */
   expiredTicks(short: string, body: string, now: Date, keepMs: number): Set<string> {
     const prefix = `${short}:`;
+    this.noteLetters(short, body);
     const current = new Set(tickedLetters(body).map((letter) => prefix + letter));
     const expired = new Set<string>();
     for (const key of current) {
@@ -195,6 +248,16 @@ export class ItemClock {
     }
   }
 
+  /** Forgets remembered letters for tabs not in seen. Called only with tabs Paseo still has. */
+  pruneLetters(seen: Set<string>): void {
+    for (const short of Object.keys(this.highest)) {
+      if (!seen.has(short)) {
+        delete this.highest[short];
+        this.dirty = true;
+      }
+    }
+  }
+
   /** The earliest moment from nowMs at which an item turns overdue, or null if none will. */
   nextDue(overdueAfterDays: number, nowMs: number): number | null {
     if (overdueAfterDays <= 0) return null;
@@ -221,7 +284,7 @@ export class ItemClock {
     mkdirSync(dirname(this.path), { recursive: true });
     // Written beside the file and renamed over it, so a crash never leaves half a file.
     const scratch = `${this.path}.${process.pid}.tmp`;
-    writeFileSync(scratch, `${JSON.stringify({ version: 1, items: this.entries, ticked: this.ticked }, null, 2)}\n`, { mode: 0o600 });
+    writeFileSync(scratch, `${JSON.stringify({ version: 1, items: this.entries, ticked: this.ticked, highest: this.highest }, null, 2)}\n`, { mode: 0o600 });
     renameSync(scratch, this.path);
     this.dirty = false;
   }

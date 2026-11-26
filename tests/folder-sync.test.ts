@@ -150,7 +150,7 @@ test("syncFolder re-reads before writing", (t) => {
   const reads = [before, edited];
   let written: string | null = null;
   const io: FileIO = {
-    read: () => (reads.length > 1 ? reads.shift()! : reads[0]),
+    read: (path) => (path.endsWith("TABS-DONE.md") ? null : reads.length > 1 ? reads.shift()! : reads[0]),
     write: (_path, text) => {
       written = text;
     },
@@ -166,7 +166,7 @@ test("writes nothing while a tab keeps changing the file", (t) => {
   let n = 0;
   let written = false;
   const io: FileIO = {
-    read: () => `## 1. Old · aaaaaaa\n\n- a) [ ] edit ${n++}\n`,
+    read: (path) => (path.endsWith("TABS-DONE.md") ? null : `## 1. Old · aaaaaaa\n\n- a) [ ] edit ${n++}\n`),
     write: () => {
       written = true;
     },

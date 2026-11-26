@@ -9,13 +9,14 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import type { PaseoState } from "./paseo-state.ts";
-import { DEFAULT_DISPLAY, type DisplayOptions, planFolder, renderFolder } from "./tabs-file.ts";
+import { DONE_FILE, moveFinishedSections } from "./tabs-done.ts";
+import { DEFAULT_DISPLAY, type DisplayOptions, closedForADay, planFolder, renderFolder, shortAgentId } from "./tabs-file.ts";
 
 export interface FileIO {
   read(path: string): string | null;
   write(path: string, text: string): void;
-  /** Tells git to ignore TABS.md after a write. Defaults to ensureExcluded. */
-  exclude?(dir: string): void;
+  /** Tells git to ignore a file after a write, TABS.md unless a name is given. Defaults to ensureExcluded. */
+  exclude?(dir: string, name?: string): void;
 }
 
 const fileIO: FileIO = {
@@ -52,15 +53,15 @@ export function isGitTopLevel(dir: string): boolean {
   return top !== null && realpathSync(top) === realpathSync(dir);
 }
 
-/** Adds TABS.md to the repo's own ignore list, the main repo's for a worktree. */
-export function ensureExcluded(dir: string): void {
+/** Adds TABS.md, or the named file, to the repo's own ignore list, the main repo's for a worktree. */
+export function ensureExcluded(dir: string, name = "TABS.md"): void {
   const relative = git(dir, ["rev-parse", "--git-path", "info/exclude"]);
   if (!relative) return;
   const path = resolve(dir, relative);
   const current = existsSync(path) ? readFileSync(path, "utf8") : "";
-  if (current.split("\n").includes("TABS.md")) return;
+  if (current.split("\n").includes(name)) return;
   mkdirSync(dirname(path), { recursive: true });
-  appendFileSync(path, `${current === "" || current.endsWith("\n") ? "" : "\n"}TABS.md\n`);
+  appendFileSync(path, `${current === "" || current.endsWith("\n") ? "" : "\n"}${name}\n`);
 }
 
 /**
@@ -86,20 +87,55 @@ export function syncFolder(
     return "skipped";
   }
 
+  const donePath = join(cwd, DONE_FILE);
+  // Paseo's records could not be read, so no tab can be called closed or finished.
+  const stateUnknown = state.agents.length === 0;
+  const closedShortIds = new Set(
+    agents.filter((agent) => agent.archivedAt !== null && closedForADay(agent, now)).map((agent) => shortAgentId(agent.id)),
+  );
+  const activeShortIds = new Set(agents.filter((agent) => agent.archivedAt === null).map((agent) => shortAgentId(agent.id)));
+  const exclude = (name?: string) => (io.exclude ?? ensureExcluded)(cwd, name);
+
   for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
-    const next = renderFolder(planFolder(current ?? "", agents, state.workspaces, now, display, overdueOf, expiredOf));
-    if (next === current) return "unchanged";
+    const done = io.read(donePath) ?? "";
+    // A tab brought back gets its section returned first, and nothing moves out on
+    // the same pass. The next pass, started by this file changing, does the moving.
+    let moves = moveFinishedSections(current ?? "", done, { closedShortIds: new Set(), activeShortIds, stateUnknown });
+    const reviving = moves.returned.length > 0;
+    if (!reviving) moves = moveFinishedSections(current ?? "", done, { closedShortIds, activeShortIds: new Set(), stateUnknown });
+    const next = renderFolder(planFolder(moves.tabs, agents, state.workspaces, now, display, overdueOf, expiredOf));
+    const doneChanged = moves.done !== done;
+    if (next === current && !doneChanged) return "unchanged";
     // A tab may have written to the file while this pass was planning.
     // Write only if the file still holds the text the plan was made from.
     const latest = io.read(path);
-    if (latest === current) {
+    if (latest !== current) {
+      current = latest;
+      continue;
+    }
+    // Two files cannot be written at once, so the order decides what a crash between
+    // them costs. Moving out: TABS-DONE.md first, so a crash leaves the section in
+    // both files. Moving back: TABS.md first, for the same reason.
+    const writeDone = () => {
+      if (!doneChanged) return;
+      io.write(donePath, moves.done);
+      exclude(DONE_FILE);
+    };
+    const writeTabs = () => {
+      if (next === current) return;
       io.write(path, next);
       // Every write, not only the first: a tab may have created the file by
       // hand, and TABS.md must never be committed.
-      (io.exclude ?? ensureExcluded)(cwd);
-      return creating ? "created" : "updated";
+      exclude();
+    };
+    if (reviving) {
+      writeTabs();
+      writeDone();
+    } else {
+      writeDone();
+      writeTabs();
     }
-    current = latest;
+    return creating ? "created" : "updated";
   }
   return "busy";
 }

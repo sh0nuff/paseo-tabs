@@ -11,7 +11,7 @@ This tab runs in Paseo. The user keeps `{{TABS_PATH}}` open beside the chat. It 
 - `Last updated YYYY-MM-DD HH:MM`
 - the bold labels **Waiting on you**, **Claude's next steps** and **Done**, each over a list of items
 
-**Items are lettered**, so the user can say "2b" for tab 2, item b. An open item is `- a) [ ] text` and a finished one is `- a) [x] ~~text~~`. Letters run on through your whole section, a to z and then aa, and an item keeps its letter when it moves to Done. Finished items leave this file a day after they are ticked, so a new item takes the letter after the highest one in your section, never a letter that is missing. End each item under **Waiting on you** with how long the user's part takes, as `(about N min)`, for example `- c) [ ] Install the app on the TV (about 5 min)`. Add items as soon as they come up: questions for the user, commands they have to run, your own follow-ups. Update the time on every change.
+**Items are lettered**, so the user can say "2b" for tab 2, item b. An open item is `- a) [ ] text` and a finished one is `- a) [x] ~~text~~`. Letters run on through your whole section, a to z and then aa, and an item keeps its letter when it moves to Done. Finished items leave this file a day after they are ticked, even the newest one. The plugin remembers each tab's highest letter, so a new item takes the letter after the highest you have used, never a letter that is missing from the file. If the section's last item has left, carry on from the highest letter you remember using. End each item under **Waiting on you** with how long the user's part takes, as `(about N min)`, for example `- c) [ ] Install the app on the TV (about 5 min)`. Add items as soon as they come up: questions for the user, commands they have to run, your own follow-ups. Update the time on every change.
 
 **Working in the file:**
 - Edit only your own section, and re-read the file right before each edit, because other tabs and the plugin write to it too.
@@ -20,7 +20,7 @@ This tab runs in Paseo. The user keeps `{{TABS_PATH}}` open beside the chat. It 
 
 **Before you say the tab can be closed.** Closing a tab gives it no turn, so never leave an item for when the tab closes. Before you tell the user the tab can be closed, do that work, then tick or hand over whatever is left.
 
-**Closed tabs.** A closed tab's section moves to the bottom of its workspace and stays while anything in it is open. It goes once nothing in it is open and the tab has been closed for 24 hours.
+**Closed tabs.** A closed tab's section moves to the bottom of its workspace and stays while anything in it is open. Once nothing in it is open and the tab has been closed for 24 hours, the plugin moves it to `TABS-DONE.md` beside `TABS.md`, where it keeps its heading, letters and items. Sections there are history: edit one only if the tab comes back, and then the plugin returns the section to `TABS.md`.
 - A closed tab can come back. A message sent to it unarchives it with its history, and its section stays valid. Prefer that to a new tab.
 - If the user asks you to take over one leftover item from another tab, add it to your section under your next letter, and mark the original `- b) [x] ~~text~~ (moved to 2f)`. That is the one edit allowed outside your section.
 - If the user asks you to continue a closed tab that can't come back, take over its whole section. Put `{{SHORT_ID}}` in its heading in place of the old ID, keep its number, letters and items, and add `Continues <old id>` under "About this tab". The section is then yours.
