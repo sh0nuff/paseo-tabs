@@ -1,0 +1,90 @@
+{
+  "workspaceId": "wks_1111111aaaaaaa",
+  "cwd": "/work/repo",
+  "highest": {
+    "aaaaaaa1-full": "d",
+    "bbbbbbb2-full": "a"
+  },
+  "items": [
+    {
+      "letter": "a",
+      "agentId": "aaaaaaa1-full",
+      "kind": "waiting",
+      "what": "Old answer",
+      "action": "do it",
+      "minutes": 5,
+      "why": "because",
+      "status": "done",
+      "picked": false,
+      "created": "2026-11-22T10:00:00-05:00",
+      "changed": "2026-11-22T10:00:00-05:00",
+      "done": "2026-11-23T10:00:00-05:00",
+      "note": null,
+      "opentodo": null
+    },
+    {
+      "letter": "b",
+      "agentId": "aaaaaaa1-full",
+      "kind": "waiting",
+      "what": "Pick the colour",
+      "action": "do it",
+      "minutes": 10,
+      "why": "because",
+      "status": "open",
+      "picked": false,
+      "created": "2026-11-25T10:00:00-05:00",
+      "changed": "2026-11-25T10:00:00-05:00",
+      "done": null,
+      "note": null,
+      "opentodo": null
+    },
+    {
+      "letter": "c",
+      "agentId": "aaaaaaa1-full",
+      "kind": "next",
+      "what": "Write the\n  report",
+      "action": "do it",
+      "minutes": 0,
+      "why": "because",
+      "status": "done",
+      "picked": false,
+      "created": "2026-11-26T08:00:00-05:00",
+      "changed": "2026-11-26T08:00:00-05:00",
+      "done": "2026-11-26T09:30:00-05:00",
+      "note": null,
+      "opentodo": null
+    },
+    {
+      "letter": "d",
+      "agentId": "aaaaaaa1-full",
+      "kind": "next",
+      "what": "Run the build",
+      "action": "do it",
+      "minutes": 20,
+      "why": "because",
+      "status": "open",
+      "picked": false,
+      "created": "2026-11-26T09:00:00-05:00",
+      "changed": "2026-11-26T09:00:00-05:00",
+      "done": null,
+      "note": null,
+      "opentodo": null
+    },
+    {
+      "letter": "a",
+      "agentId": "bbbbbbb2-full",
+      "kind": "waiting",
+      "what": "Not needed after all",
+      "action": "do it",
+      "minutes": 5,
+      "why": "because",
+      "status": "dropped",
+      "picked": false,
+      "created": "2026-11-26T08:00:00-05:00",
+      "changed": "2026-11-26T08:00:00-05:00",
+      "done": "2026-11-26T09:00:00-05:00",
+      "note": null,
+      "opentodo": null
+    }
+  ]
+}

@@ -4,11 +4,13 @@
 // the display settings change, when a waiting item reaches the overdue limit, or
 // when a finished item has been ticked for a day.
 
-import { statSync } from "node:fs";
+import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { syncFolder } from "./folder-sync.ts";
 import type { ItemClock } from "./item-clock.ts";
 import { loadState, stateFingerprint } from "./paseo-state.ts";
+import { allFiles } from "./pending-store.ts";
+import { renderView } from "./pending-view.ts";
 import { DEFAULT_DISPLAY, type DisplayOptions, TICKED_KEEP_MS, shortAgentId } from "./tabs-file.ts";
 
 export function syncAll(
@@ -16,6 +18,7 @@ export function syncAll(
   now: Date = new Date(),
   display: DisplayOptions = DEFAULT_DISPLAY,
   clock?: ItemClock,
+  pendingDir?: string,
 ): Record<string, string> {
   const state = loadState(home);
   const overdueOf = clock
@@ -26,9 +29,24 @@ export function syncAll(
       ? (short: string, body: string) => clock.expiredTicks(short, body, now, TICKED_KEEP_MS)
       : undefined;
   const results: Record<string, string> = {};
+  // With the pending store on, TABS.md is a read-only view of it. A store that cannot be read leaves every file alone.
+  const store = pendingDir !== undefined && (display as DisplayOptions & { pendingStore?: boolean }).pendingStore === true;
+  let files: ReturnType<typeof allFiles> | null = null;
+  if (store) {
+    try {
+      files = allFiles(pendingDir);
+    } catch (error) {
+      console.error("paseo-tabs: could not read the pending store:", error);
+    }
+  }
   for (const cwd of new Set(state.agents.map((agent) => agent.cwd))) {
     try {
-      results[cwd] = syncFolder(cwd, state, now, undefined, display, overdueOf, expiredOf);
+      if (store && files === null) {
+        results[cwd] = "skipped";
+        continue;
+      }
+      const viewOf = store && files !== null ? () => renderView(files.filter((file) => file.cwd === cwd), state, now, display, cwd) : undefined;
+      results[cwd] = syncFolder(cwd, state, now, undefined, display, overdueOf, expiredOf, viewOf);
     } catch (error) {
       results[cwd] = "error";
       console.error(`paseo-tabs: could not sync ${cwd}:`, error);
@@ -51,6 +69,19 @@ export function syncAll(
   return results;
 }
 
+/** When the next finished item in the store passes a day and leaves the view, or null. */
+function nextViewExpiry(dir: string, nowMs: number): number | null {
+  try {
+    const times = allFiles(dir).flatMap((file) =>
+      file.items.filter((item) => item.status !== "open").map((item) => Date.parse(item.done ?? item.changed) + TICKED_KEEP_MS),
+    );
+    const later = times.filter((time) => time > nowMs);
+    return later.length === 0 ? null : Math.min(...later);
+  } catch {
+    return null;
+  }
+}
+
 export interface Watcher {
   stop(): void;
   /** Sync every folder now, for example after the display settings changed. */
@@ -63,7 +94,8 @@ export function startWatcher(
     intervalMs = 2000,
     display = () => DEFAULT_DISPLAY,
     clock,
-  }: { intervalMs?: number; display?: () => DisplayOptions; clock?: ItemClock } = {},
+    pendingDir,
+  }: { intervalMs?: number; display?: () => DisplayOptions; clock?: ItemClock; pendingDir?: string } = {},
 ): Watcher {
   let seen: string | null = null;
   let folders: string[] = [];
@@ -81,6 +113,17 @@ export function startWatcher(
         parts.push(`${cwd}:none`);
       }
     }
+    // The store's files are part of what is watched while TABS.md is generated from it.
+    if (pendingDir !== undefined && (display() as DisplayOptions & { pendingStore?: boolean }).pendingStore === true) {
+      try {
+        for (const name of readdirSync(pendingDir).sort()) {
+          const info = statSync(join(pendingDir, name));
+          parts.push(`${name}:${info.mtimeMs}:${info.size}`);
+        }
+      } catch {
+        parts.push("pending:none");
+      }
+    }
     return parts.join("\n");
   };
   const tick = (force = false) => {
@@ -93,10 +136,12 @@ export function startWatcher(
       seen = current;
       const now = new Date();
       const options = display();
-      folders = Object.keys(syncAll(home, now, options, clock));
+      folders = Object.keys(syncAll(home, now, options, clock, pendingDir));
       const overdueAt = clock?.nextDue(options.overdueAfterDays, now.getTime()) ?? null;
       const expiresAt = options.removeFinished !== false ? clock?.nextTickExpiry(TICKED_KEEP_MS, now.getTime()) ?? null : null;
-      due = overdueAt === null ? expiresAt : expiresAt === null ? overdueAt : Math.min(overdueAt, expiresAt);
+      const leavesAt = pendingDir !== undefined && (options as DisplayOptions & { pendingStore?: boolean }).pendingStore === true ? nextViewExpiry(pendingDir, now.getTime()) : null;
+      const times = [overdueAt, expiresAt, leavesAt].filter((time): time is number => time !== null);
+      due = times.length === 0 ? null : Math.min(...times);
     } catch (error) {
       console.error("paseo-tabs: sync pass failed:", error);
     }

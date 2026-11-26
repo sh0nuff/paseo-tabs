@@ -1,0 +1,62 @@
+{
+  "agents": [
+    {
+      "id": "aaaaaaa1-full",
+      "title": "Build the panel",
+      "cwd": "/work/repo",
+      "workspaceId": "wks_1111111aaaaaaa",
+      "provider": "claude",
+      "createdAt": "2026-11-20T09:00:00.000Z",
+      "archivedAt": null,
+      "lastUserMessageAt": null
+    },
+    {
+      "id": "bbbbbbb2-full",
+      "title": "Side question",
+      "cwd": "/work/repo",
+      "workspaceId": "wks_1111111aaaaaaa",
+      "provider": "claude",
+      "createdAt": "2026-11-20T10:00:00.000Z",
+      "archivedAt": "2026-11-26T12:00:00.000Z",
+      "lastUserMessageAt": null
+    },
+    {
+      "id": "ccccccc3-full",
+      "title": "Finished chat",
+      "cwd": "/work/repo",
+      "workspaceId": "wks_2222222bbbbbbb",
+      "provider": "claude",
+      "createdAt": "2026-11-25T09:00:00.000Z",
+      "archivedAt": null,
+      "lastUserMessageAt": null
+    },
+    {
+      "id": "ddddddd4-full",
+      "title": "Brand new",
+      "cwd": "/work/repo",
+      "workspaceId": "wks_2222222bbbbbbb",
+      "provider": "claude",
+      "createdAt": "2026-11-25T10:00:00.000Z",
+      "archivedAt": null,
+      "lastUserMessageAt": null
+    }
+  ],
+  "workspaces": [
+    {
+      "id": "wks_1111111aaaaaaa",
+      "cwd": "/work/repo",
+      "title": "One",
+      "archivedAt": null,
+      "createdAt": "2026-11-20T09:00:00.000Z",
+      "pinnedAt": null
+    },
+    {
+      "id": "wks_2222222bbbbbbb",
+      "cwd": "/work/repo",
+      "title": "Two",
+      "archivedAt": null,
+      "createdAt": "2026-11-25T09:00:00.000Z",
+      "pinnedAt": null
+    }
+  ]
+}

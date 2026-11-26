@@ -22,7 +22,7 @@ export default function contribute(server: PluginServerContext) {
   // The first pass waits for the saved settings, so a file is never written
   // with the defaults and then again with the user's choice.
   const start = () => {
-    if (!stopped && !watcher) watcher = startWatcher(home, { display: () => display, clock });
+    if (!stopped && !watcher) watcher = startWatcher(home, { display: () => display, clock, pendingDir: pendingDir(process.env) });
   };
 
   const settings = server.registerSettings(displaySettings);

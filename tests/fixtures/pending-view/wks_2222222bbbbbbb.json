@@ -1,0 +1,41 @@
+{
+  "workspaceId": "wks_2222222bbbbbbb",
+  "cwd": "/work/repo",
+  "highest": {
+    "ccccccc3-full": "b"
+  },
+  "items": [
+    {
+      "letter": "a",
+      "agentId": "ccccccc3-full",
+      "kind": "waiting",
+      "what": "First thing",
+      "action": "do it",
+      "minutes": 5,
+      "why": "because",
+      "status": "done",
+      "picked": false,
+      "created": "2026-11-20T10:00:00-05:00",
+      "changed": "2026-11-20T10:00:00-05:00",
+      "done": "2026-11-21T10:00:00-05:00",
+      "note": null,
+      "opentodo": null
+    },
+    {
+      "letter": "b",
+      "agentId": "ccccccc3-full",
+      "kind": "waiting",
+      "what": "Second thing",
+      "action": "do it",
+      "minutes": 5,
+      "why": "because",
+      "status": "done",
+      "picked": false,
+      "created": "2026-11-20T10:00:00-05:00",
+      "changed": "2026-11-20T10:00:00-05:00",
+      "done": "2026-11-22T10:00:00-05:00",
+      "note": null,
+      "opentodo": null
+    }
+  ]
+}

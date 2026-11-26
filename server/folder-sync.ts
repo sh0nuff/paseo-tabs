@@ -76,6 +76,8 @@ export function syncFolder(
   display: DisplayOptions = DEFAULT_DISPLAY,
   overdueOf?: (short: string, body: string) => number,
   expiredOf?: (short: string, body: string) => ReadonlySet<string>,
+  /** With the pending store on: the folder's whole TABS.md, rendered from the store. Nothing in the file is read back. */
+  viewOf?: () => string,
 ): "created" | "updated" | "unchanged" | "skipped" | "busy" {
   if (!isGitTopLevel(cwd)) return "skipped";
   const agents = state.agents.filter((agent) => agent.cwd === cwd);
@@ -100,10 +102,13 @@ export function syncFolder(
     const done = io.read(donePath) ?? "";
     // A tab brought back gets its section returned first, and nothing moves out on
     // the same pass. The next pass, started by this file changing, does the moving.
-    let moves = moveFinishedSections(current ?? "", done, { closedShortIds: new Set(), activeShortIds, stateUnknown });
-    const reviving = moves.returned.length > 0;
-    if (!reviving) moves = moveFinishedSections(current ?? "", done, { closedShortIds, activeShortIds, stateUnknown });
-    const next = renderFolder(planFolder(moves.tabs, agents, state.workspaces, now, display, overdueOf, expiredOf));
+    // A view already holds every tab with items, so it needs no returning.
+    const view = viewOf?.();
+    let moves = moveFinishedSections(view ?? current ?? "", done, { closedShortIds: new Set(), activeShortIds, stateUnknown });
+    const reviving = view === undefined && moves.returned.length > 0;
+    if (!reviving) moves = moveFinishedSections(view ?? current ?? "", done, { closedShortIds, activeShortIds, stateUnknown });
+    const next =
+      view !== undefined ? moves.tabs : renderFolder(planFolder(moves.tabs, agents, state.workspaces, now, display, overdueOf, expiredOf));
     const doneChanged = moves.done !== done;
     if (next === current && !doneChanged) return "unchanged";
     // A tab may have written to the file while this pass was planning.
