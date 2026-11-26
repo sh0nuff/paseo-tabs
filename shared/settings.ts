@@ -14,6 +14,7 @@ export const displaySettings = defineSettings({
     palette: z.enum(["default", "catppuccin", "gruvbox", "nord"]).default("default"),
     workspaceOrder: z.enum(["newest", "latestMessage"]).default("newest"),
     removeFinished: z.boolean().default(true),
+    pendingStore: z.boolean().default(false),
   }),
 });
 

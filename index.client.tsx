@@ -1,4 +1,5 @@
 import type { PluginClientContext } from "@getpaseo/plugin/client";
+import { PendingPanel } from "./client/pending-panel.tsx";
 import { SettingsScreen } from "./client/settings-screen.tsx";
 import { TabsLine } from "./client/tabs-line.tsx";
 import { TabsPanel } from "./client/tabs-panel.tsx";
@@ -10,6 +11,22 @@ export default function contribute(client: PluginClientContext) {
     icon: "ListChecks",
     context: "workspace",
     Component: TabsPanel,
+  });
+  client.addWorkspacePanel({
+    id: "pending",
+    title: "Pending",
+    icon: "ListChecks",
+    context: "workspace",
+    Component: PendingPanel,
+  });
+  client.addCommandCenterItem({
+    id: "open-pending",
+    title: "Open Pending",
+    icon: "ListChecks",
+    context: "workspace",
+    onSelect({ openPanel }) {
+      openPanel("pending");
+    },
   });
   client.addCommandCenterItem({
     id: "open-tabs",

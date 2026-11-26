@@ -113,6 +113,13 @@ export function SettingsScreen({ theme, layout }: PluginSurfaceProps) {
           disabled={settings.saving}
           onValueChange={(removeFinished) => void save({ removeFinished })}
         />
+        <SettingsSwitch
+          label="Use the Pending panel instead of TABS.md"
+          hint="The Open Tabs command opens the Pending panel, which lists what waits on you as cards."
+          value={values.pendingStore}
+          disabled={settings.saving}
+          onValueChange={(pendingStore) => void save({ pendingStore })}
+        />
       </SettingsSection>
       <SettingsSection title="Panel colours">
         <SettingsSelect
