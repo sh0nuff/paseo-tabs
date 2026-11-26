@@ -54,6 +54,7 @@ export function pendingTools(dir: string): AgentToolDefinition[] {
       }),
       execute: ({ letter, ...patch }, context) =>
         guarded((ws, c) => {
+          if (Object.values(patch).every((v) => v === undefined)) throw new Error("Nothing to update.");
           updateItem(dir, ws, c.agent.id, letter, patch, new Date());
           return `Updated item ${letter}.`;
         })(context),
@@ -70,13 +71,13 @@ export function pendingTools(dir: string): AgentToolDefinition[] {
     }),
     defineAgentTool({
       name: "pending_list",
-      description: "List the open pending items in this workspace, one line each. Items from other tabs are marked.",
+      description: "List the open pending items of this tab, one line each. Only this tab's items are listed.",
       input: z.object({}),
       execute: (_input, context) =>
         guarded((ws, c) => {
           const lines = listOpen(dir, ws, new Date())
-            .filter((i) => i.status === "open")
-            .map((i) => `${i.letter}) ${i.what} (about ${i.minutes} min)${i.agentId === c.agent.id ? "" : " [other tab]"}`);
+            .filter((i) => i.status === "open" && i.agentId === c.agent.id)
+            .map((i) => `${i.letter}) ${i.what} (about ${i.minutes} min)`);
           return lines.length ? lines.join("\n") : "No open items.";
         })(context),
     }),

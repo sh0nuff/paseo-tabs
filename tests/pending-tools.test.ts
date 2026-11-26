@@ -72,3 +72,18 @@ test("a corrupt store comes back as a tool error", async (t) => {
   assert.equal(r.isError, true);
   assert.match(r.text!, /not valid JSON/);
 });
+
+test("pending_list leaves out another agent's items in the same workspace", async (t) => {
+  const dir = tempDir(t);
+  addItem(dir, "w", "/c", "A", F, new Date());
+  addItem(dir, "w", "/c", "B", { ...F, what: "Theirs" }, new Date());
+  assert.equal((await tool(dir, "pending_list")({})).text, "a) Pick (about 5 min)");
+});
+
+test("pending_update with only a letter says nothing to update", async (t) => {
+  const dir = tempDir(t);
+  await tool(dir, "pending_add")(F);
+  const r = await tool(dir, "pending_update")({ letter: "a" });
+  assert.equal(r.isError, true);
+  assert.equal(r.text, "Nothing to update.");
+});
