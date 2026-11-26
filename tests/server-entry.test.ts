@@ -11,6 +11,7 @@ type Listener = (state: unknown) => void;
 function fakeServer(initial?: unknown) {
   const listeners: Listener[] = [];
   const handlers = new Map<string, (input: unknown) => unknown>();
+  const hooks = new Map<string, unknown>();
   let stored: unknown = initial ?? { status: "ready", revision: "1", values: { statusDots: true, shortenNames: true, maxNameLength: 40, overdueAfterDays: 7, palette: "default", workspaceOrder: "newest", removeFinished: true } };
   const server = {
     registerSettings: () => ({
@@ -22,6 +23,7 @@ function fakeServer(initial?: unknown) {
     }),
     handle: (contract: { name: string }, handler: (input: unknown) => unknown) => handlers.set(contract.name, handler),
     on: () => () => {},
+    addHook: (name: string, handler: unknown) => hooks.set(name, handler),
     before: () => () => {},
     registerProvider: () => {},
     registerUsageSource: () => {},
@@ -30,7 +32,7 @@ function fakeServer(initial?: unknown) {
     stored = state;
     for (const listener of listeners) listener(state);
   };
-  return { server, handlers, emit };
+  return { server, handlers, emit, hooks };
 }
 
 test("the plugin entry applies saved settings and serves tabs.list", async (t) => {
@@ -121,4 +123,26 @@ test("the plugin entry keeps its clock under XDG_STATE_HOME", async (t) => {
   assert.equal(files.length, 1);
   assert.match(files[0], /^items-[0-9a-f]{8}\.json$/);
   assert.match(readFileSync(join(root, "state", "paseo-tabs", files[0]), "utf8"), /"aaaaaaa:a"/);
+});
+
+test("the plugin entry attaches the pending tools to Claude agents only", async (t) => {
+  const root = tempDir(t);
+  const home = makeHome(root);
+  const previousHome = process.env.PASEO_HOME;
+  const previousState = process.env.XDG_STATE_HOME;
+  process.env.PASEO_HOME = home;
+  process.env.XDG_STATE_HOME = join(root, "state");
+  const { server, hooks } = fakeServer();
+  const cleanup = contribute(server as never);
+  t.after(async () => {
+    await cleanup?.();
+    if (previousHome === undefined) delete process.env.PASEO_HOME;
+    else process.env.PASEO_HOME = previousHome;
+    if (previousState === undefined) delete process.env.XDG_STATE_HOME;
+    else process.env.XDG_STATE_HOME = previousState;
+  });
+  const hook = hooks.get("agent.open.before") as (a: { request: unknown }) => Promise<{ tools: { name: string }[] } | undefined>;
+  const claude = await hook({ request: { provider: "claude", tools: [] } });
+  assert.deepEqual(claude?.tools.map((x) => x.name), ["pending_add", "pending_update", "pending_done", "pending_list"]);
+  assert.equal(await hook({ request: { provider: "codex", tools: [] } }), undefined);
 });

@@ -1,6 +1,8 @@
 import type { PluginServerContext } from "@getpaseo/plugin/server";
 import { ItemClock, clockPath } from "./server/item-clock.ts";
 import { paseoHome } from "./server/paseo-state.ts";
+import { pendingDir } from "./server/pending-store.ts";
+import { pendingTools } from "./server/pending-tools.ts";
 import { DEFAULT_DISPLAY, type DisplayOptions } from "./server/tabs-file.ts";
 import { cachedFor, workspaceLines } from "./server/tabs-lines.ts";
 import { listTabs } from "./server/tabs-list.ts";
@@ -40,6 +42,11 @@ export default function contribute(server: PluginServerContext) {
     },
   );
   const unsubscribe = settings.subscribe(apply);
+
+  const tools = pendingTools(pendingDir(process.env));
+  server.addHook("agent.open.before", async ({ request }) =>
+    request.provider === "claude" ? { ...request, tools: [...request.tools, ...tools] } : undefined,
+  );
 
   server.handle(tabsList, ({ workspaceId }) => ({ tabs: listTabs(home, workspaceId, new Date(), display, clock) }));
   // Every sidebar row asks for its line, so the answer is worked out at most every 2 seconds.
