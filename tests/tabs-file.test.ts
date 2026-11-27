@@ -26,6 +26,9 @@ function agent(id: string, fields: Partial<AgentRecord> = {}): AgentRecord {
     createdAt: "2026-10-24T09:00:00.000Z",
     archivedAt: null,
     lastUserMessageAt: null,
+    updatedAt: null,
+    lastActivityAt: null,
+    parentAgentId: null,
     ...fields,
   };
 }

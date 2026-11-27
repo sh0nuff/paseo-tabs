@@ -56,6 +56,9 @@ test("loadState reads agents and workspaces", (t) => {
       createdAt: "2026-10-24T10:00:00.000Z",
       archivedAt: "2026-10-24T11:00:00.000Z",
       lastUserMessageAt: null,
+      updatedAt: null,
+      lastActivityAt: null,
+      parentAgentId: null,
     },
   ]);
   assert.deepEqual(state.workspaces, [

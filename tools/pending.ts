@@ -6,6 +6,8 @@
 //   node tools/pending.ts auto-archive --agent <id> [--scheduled <iso time>] [--attempt N]
 //                                                       archive the agent's workspace if still nothing is open
 //   node tools/pending.ts find <words...>                tabs to hand work to, one JSON line each
+//   node tools/pending.ts sweep --dry-run                 the daemon sweep's decision for every live
+//                                                       workspace (archive / skip: reason); reads only
 //
 // Without --workspace, the agent's workspace comes from Paseo's own records (--home, else
 // $PASEO_HOME or ~/.paseo), and `add` takes that workspace's folder as its --cwd.
@@ -18,13 +20,15 @@ import { scheduleAutoArchive } from "../server/schedule-archive.ts";
 import { autoArchive, findTabs, isArchived } from "../server/auto-archive.ts";
 import { loadState, paseoHome } from "../server/paseo-state.ts";
 import { addItem, finishItem, listOpen, pendingDir, reopenItem, updateItem } from "../server/pending-store.ts";
+import { sweep } from "../server/sweep.ts";
 import { paseoRunner, runRestore } from "../server/workspace-control.ts";
 
 const USAGE =
   "usage: pending.ts <add|update|done|drop|reopen|list> --agent <id> [--workspace <id>] [--letter x] [--json '{...}'] [--note '...'] [--cwd <dir>] [--home <Paseo home>]\n" +
   "       pending.ts auto-archive --agent <id> [--scheduled <iso time>] [--attempt N]\n" +
-  "       pending.ts find <words...>";
-const COMMANDS = ["add", "update", "done", "drop", "reopen", "list", "auto-archive", "find"];
+  "       pending.ts find <words...>\n" +
+  "       pending.ts sweep --dry-run";
+const COMMANDS = ["add", "update", "done", "drop", "reopen", "list", "auto-archive", "find", "sweep"];
 
 async function main(): Promise<void> {
   const { positionals, values } = parseArgs({
@@ -40,6 +44,7 @@ async function main(): Promise<void> {
       home: { type: "string" },
       scheduled: { type: "string" },
       attempt: { type: "string" },
+      "dry-run": { type: "boolean" },
     },
   });
   const [command, ...words] = positionals;
@@ -49,6 +54,13 @@ async function main(): Promise<void> {
   const now = new Date();
   if (command === "find") {
     for (const row of findTabs(loadState(home), registryPath(process.env), words.join(" "), now)) process.stdout.write(`${JSON.stringify(row)}\n`);
+    return;
+  }
+  if (command === "sweep") {
+    // Only the dry run is offered here: the real sweep runs in the daemon.
+    if (!values["dry-run"]) throw new Error("sweep only runs with --dry-run from the command line; the daemon does the real sweep");
+    const decisions = await sweep({ home, dir, registry: registryPath(process.env), runner: paseoRunner(process.env), now, dryRun: true });
+    for (const d of decisions) process.stdout.write(`${d.action === "archive" ? "archive" : `skip: ${d.reason}`}  ${d.workspaceId} "${d.name}"\n`);
     return;
   }
   const fields = values.json ? JSON.parse(values.json) : {};

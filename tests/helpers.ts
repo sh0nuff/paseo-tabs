@@ -35,6 +35,9 @@ export interface AgentJson {
   createdAt?: string;
   archivedAt?: string | null;
   lastUserMessageAt?: string | null;
+  updatedAt?: string | null;
+  lastActivityAt?: string | null;
+  labels?: Record<string, string>;
 }
 
 /** Writes an agent file. mtime, when given, makes the change visible to the fingerprint. */

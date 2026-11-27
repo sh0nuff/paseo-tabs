@@ -3,7 +3,8 @@
 // reading an agent's status use the CLI. Everything goes through a runner, so tests
 // pass a fake one and never touch the daemon.
 
-import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { execFile, spawn, spawnSync } from "node:child_process";
+import { promisify } from "node:util";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -77,15 +78,17 @@ async function withClient<T>(env: Record<string, string | undefined>, work: (cli
 
 /** The real runner: the client library for restore, the `paseo` CLI for the rest. */
 export function paseoRunner(env: Record<string, string | undefined> = process.env): ControlRunner {
-  const paseo = (args: string[]) => execFileSync("paseo", args, { encoding: "utf8", env: env as NodeJS.ProcessEnv, timeout: 30_000, stdio: ["ignore", "pipe", "pipe"] });
+  // Asynchronous, so the daemon's sweep never blocks its event loop while the CLI runs.
+  const run = promisify(execFile);
+  const paseo = async (args: string[]) => (await run("paseo", args, { encoding: "utf8", env: env as NodeJS.ProcessEnv, timeout: 30_000 })).stdout;
   return {
     inspect: (id) => withClient(env, (c) => c.inspectWorkspaceRecovery(id)),
     restore: (id) => withClient(env, (c) => c.restoreWorkspace(id)),
     archive: async (id) => {
-      paseo(["workspace", "archive", id]);
+      await paseo(["workspace", "archive", id]);
     },
     agentStatus: async (id) => {
-      const raw = JSON.parse(paseo(["agent", "inspect", id, "--json"]));
+      const raw = JSON.parse(await paseo(["agent", "inspect", id, "--json"]));
       const status = raw?.Status ?? raw?.status;
       return typeof status === "string" ? status.toLowerCase() : null;
     },

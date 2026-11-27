@@ -1,5 +1,8 @@
 import type { PluginServerContext } from "@getpaseo/plugin/server";
 import { pendingActivityHandler } from "./server/activity.ts";
+import { registryPath } from "./server/archived-tabs.ts";
+import { decisionLine, startSweeper, sweep } from "./server/sweep.ts";
+import { paseoRunner } from "./server/workspace-control.ts";
 import { ItemClock, clockPath } from "./server/item-clock.ts";
 import { paseoHome } from "./server/paseo-state.ts";
 import { pendingEnabledHandler, storeMode, pendingListHandler, pendingPickHandler, pendingSearchHandler, pendingUnpickHandler } from "./server/pending-rpc.ts";
@@ -69,8 +72,17 @@ export default function contribute(server: PluginServerContext) {
   server.handle(pendingEnabled, () => pendingEnabledHandler(store));
   server.handle(pendingSearch, ({ query }) => pendingSearchHandler(store, home, query));
   server.handle(pendingActivity, ({ agentId, draftLength }) => pendingActivityHandler(store, agentId, draftLength, new Date()));
+
+  // Archives finished, quiet workspaces every 5 minutes, for tabs whose Stop hook never loaded.
+  // PASEO_TABS_SWEEP_DRY_RUN=1 only logs what it would archive.
+  const dryRun = process.env.PASEO_TABS_SWEEP_DRY_RUN === "1";
+  const sweeper = startSweeper(async () => {
+    const decisions = await sweep({ home, dir: store, registry: registryPath(process.env), runner: paseoRunner(process.env), now: new Date(), dryRun });
+    for (const d of decisions) if (d.action !== "skip") console.log(`paseo-tabs sweep: ${decisionLine(d)}`);
+  });
   return () => {
     stopped = true;
+    sweeper.stop();
     unsubscribe();
     watcher?.stop();
   };

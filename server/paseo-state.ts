@@ -16,6 +16,11 @@ export interface AgentRecord {
   createdAt: string;
   archivedAt: string | null;
   lastUserMessageAt: string | null;
+  /** When Paseo last rewrote the record. */
+  updatedAt: string | null;
+  lastActivityAt: string | null;
+  /** The `paseo.parent-agent-id` label: the agent that started this one as a subagent. */
+  parentAgentId: string | null;
 }
 
 export interface WorkspaceRecord {
@@ -93,6 +98,9 @@ export function loadState(home: string): PaseoState {
       createdAt: text(raw.createdAt) ?? "",
       archivedAt: text(raw.archivedAt),
       lastUserMessageAt: text(raw.lastUserMessageAt),
+      updatedAt: text(raw.updatedAt),
+      lastActivityAt: text(raw.lastActivityAt),
+      parentAgentId: text((raw.labels as Record<string, unknown> | undefined)?.["paseo.parent-agent-id"]),
     });
   }
 
