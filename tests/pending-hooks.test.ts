@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { addItem } from "../server/pending-store.ts";
 import { tempDir } from "./helpers.ts";
@@ -20,7 +20,8 @@ function setup(t: { after: (fn: () => void) => void }, marker = true) {
 }
 
 function run(script: string, state: string, agent: string | undefined, input = "") {
-  const env: Record<string, string> = { PATH: process.env.PATH ?? "", HOME: "/nonexistent", XDG_STATE_HOME: state };
+  // A temp Paseo home and a PATH with no paseo or systemd-run, so nothing real is read or run.
+  const env: Record<string, string> = { PATH: dirname(process.execPath), HOME: join(state, "no-home"), PASEO_HOME: join(state, "no-paseo"), XDG_STATE_HOME: state };
   if (agent) env.PASEO_AGENT_ID = agent;
   const r = spawnSync(process.execPath, [script], { env, input, encoding: "utf8", timeout: 5000 });
   return { stdout: r.stdout, status: r.status };

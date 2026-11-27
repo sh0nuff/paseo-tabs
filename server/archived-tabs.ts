@@ -1,6 +1,7 @@
 // The record of workspaces this plugin archived by itself, so any tab can find a
 // workspace to hand work to. One JSON file, ${state}/paseo-tabs/archived-tabs.json,
-// written under the same lock-and-rename scheme as the pending store. Entries older
+// written under the same lock-and-rename scheme as the pending store. One entry per tab
+// of the archived workspace, each with the workspace's name. Entries older
 // than 30 days are dropped on every read and write; an entry goes when its workspace
 // is restored.
 
@@ -64,9 +65,10 @@ export function readRegistry(path: string, now: Date): ArchivedTab[] {
   return kept;
 }
 
-/** Records an archived workspace, replacing any earlier entry for the same workspace. */
-export function recordArchived(path: string, entry: ArchivedTab, now: Date): void {
-  mutate(path, now, (entries) => ({ entries: [...entries.filter((e) => e.workspaceId !== entry.workspaceId), entry], result: undefined }));
+/** Records the tabs of archived workspaces, replacing every earlier entry for those workspaces. */
+export function recordArchived(path: string, added: ArchivedTab[], now: Date): void {
+  const ids = new Set(added.map((e) => e.workspaceId));
+  mutate(path, now, (entries) => ({ entries: [...entries.filter((e) => !ids.has(e.workspaceId)), ...added], result: undefined }));
 }
 
 /** Drops the entries for these workspaces. Returns how many went. Leaves the file alone when none match. */

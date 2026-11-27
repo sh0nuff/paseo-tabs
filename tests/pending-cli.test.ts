@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { readPending } from "../server/pending-store.ts";
 import { makeHome, tempDir, writeAgent, writeWorkspaces } from "./helpers.ts";
 
@@ -16,7 +16,10 @@ function setup(t: { after: (fn: () => void) => void }) {
   writeWorkspaces(home, [{ workspaceId: "wks_1111111aaaaaaa", cwd: "/work/one", title: "One" }]);
   writeAgent(home, { id: "aaaaaaa1-full", cwd: "/work/one/sub", workspaceId: "wks_1111111aaaaaaa" });
   const run = (...args: string[]) =>
-    execFileSync(process.execPath, [TOOL, ...args, "--dir", dir, "--home", home], { encoding: "utf8" });
+    execFileSync(process.execPath, [TOOL, ...args, "--dir", dir, "--home", home], {
+      encoding: "utf8",
+      env: { PATH: dirname(process.execPath), HOME: join(root, "no-home"), XDG_STATE_HOME: join(root, "state") },
+    });
   return { home, dir, run };
 }
 

@@ -13,11 +13,17 @@ export type AutoArchiveOptions = {
   registry: string;
   runner: ControlRunner;
   now: Date;
+  /** When the archive was scheduled: a user message to any tab after this means someone is there. */
+  scheduledAt?: Date;
 };
+
+/** Statuses of a tab that is not working: "closed" is an idle tab Paseo has unloaded. */
+const RESTING = new Set(["idle", "closed"]);
 
 /**
  * Checks again, at run time, that the agent's workspace still has no open items, that
- * every live tab in it is idle and that it is not archived yet; then records it in the
+ * every live tab in it is idle (or closed), that nobody messaged any of them since the
+ * archive was scheduled, and that it is not archived yet; then records each tab in the
  * registry and archives it. Returns one line saying what it did or why not.
  */
 export async function autoArchive(o: AutoArchiveOptions): Promise<string> {
@@ -32,6 +38,11 @@ export async function autoArchive(o: AutoArchiveOptions): Promise<string> {
   if (open.length > 0) return `auto-archive ${wsId}: ${open.length} open item(s), not archived`;
   const tabs = state.agents.filter((a) => a.workspaceId === wsId && !a.archivedAt);
   if (!tabs.some((a) => a.id === o.agentId)) tabs.push(agent);
+  if (o.scheduledAt) {
+    const since = o.scheduledAt.getTime();
+    const busy = tabs.find((a) => a.lastUserMessageAt && Date.parse(a.lastUserMessageAt) > since);
+    if (busy) return `auto-archive ${wsId}: tab ${busy.id} got a message after the archive was scheduled, not archived`;
+  }
   for (const tab of tabs) {
     let status: string | null;
     try {
@@ -39,18 +50,27 @@ export async function autoArchive(o: AutoArchiveOptions): Promise<string> {
     } catch {
       status = null;
     }
-    if (status !== "idle") return `auto-archive ${wsId}: tab ${tab.id} is ${status ?? "unknown"}, not archived`;
+    if (status === null || !RESTING.has(status)) return `auto-archive ${wsId}: tab ${tab.id} is ${status ?? "unknown"}, not archived`;
   }
+  const at = o.now.toISOString();
   recordArchived(
     o.registry,
-    { workspaceId: wsId, workspaceName: ws.title ?? "", agentId: o.agentId, agentTitle: agent.title ?? "", cwd: ws.cwd, archivedAt: o.now.toISOString() },
+    tabs.map((a) => ({ workspaceId: wsId, workspaceName: ws.title ?? "", agentId: a.id, agentTitle: a.title ?? "", cwd: ws.cwd, archivedAt: at })),
     o.now,
   );
   try {
     await archiveWorkspace(wsId, o.runner);
   } catch (error) {
-    removeArchived(o.registry, [wsId], o.now);
-    return `auto-archive ${wsId}: archive failed: ${error instanceof Error ? error.message : String(error)}`;
+    // A timeout may still have archived it: keep the entries unless Paseo shows it live.
+    let archivedAnyway = false;
+    try {
+      archivedAnyway = isArchived(loadState(o.home), wsId);
+    } catch {
+      // treat as not archived
+    }
+    if (!archivedAnyway) removeArchived(o.registry, [wsId], o.now);
+    const why = error instanceof Error ? error.message : String(error);
+    return `auto-archive ${wsId}: archive failed${archivedAnyway ? " but Paseo shows it archived, entries kept" : ""}: ${why}`;
   }
   return `auto-archive ${wsId}: archived ("${ws.title ?? ""}", tab ${o.agentId})`;
 }

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync, mkdirSync, utimesSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
   PendingCorrupt, localIso, addItem, finishItem, importFiles, listOpen, pendingDir, readPending, reopenItem, setPicked, clearPicked, updateItem, allFiles,
 } from "../server/pending-store.ts";
@@ -65,7 +65,11 @@ test("concurrent writers lose nothing", async (t) => {
   const dir = tempDir(t);
   const run = () =>
     new Promise<void>((resolve, reject) => {
-      const child = spawn(process.execPath, ["tools/pending.ts", "add", "--workspace", "w", "--agent", "A", "--dir", dir, "--json", JSON.stringify(F)], { stdio: "ignore" });
+      const child = spawn(
+        process.execPath,
+        ["tools/pending.ts", "add", "--workspace", "w", "--agent", "A", "--dir", dir, "--home", join(dir, "no-paseo"), "--json", JSON.stringify(F)],
+        { stdio: "ignore", env: { PATH: dirname(process.execPath), HOME: join(dir, "no-home"), XDG_STATE_HOME: join(dir, "state") } },
+      );
       child.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`exit ${code}`))));
     });
   const worker = async () => {

@@ -91,16 +91,16 @@ test("registry drops entries older than 30 days on read and on write", (t) => {
   assert.deepEqual(readRegistry(path, now).map((e) => e.workspaceId), ["recent"]);
   assert.deepEqual(JSON.parse(readFileSync(path, "utf8")).entries.map((e: ArchivedTab) => e.workspaceId), ["recent"]);
   writeFileSync(path, JSON.stringify({ entries: [entry("old", old)] }));
-  recordArchived(path, entry("new", now.toISOString()), now);
+  recordArchived(path, [entry("new", now.toISOString())], now);
   assert.deepEqual(readRegistry(path, now).map((e) => e.workspaceId), ["new"]);
 });
 
 test("registry replaces an entry for the same workspace and removes on restore", (t) => {
   const path = join(tempDir(t), "archived-tabs.json");
   const now = new Date();
-  recordArchived(path, entry("w1", now.toISOString()), now);
-  recordArchived(path, entry("w1", now.toISOString(), { agentTitle: "second" }), now);
-  recordArchived(path, entry("w2", now.toISOString()), now);
+  recordArchived(path, [entry("w1", now.toISOString())], now);
+  recordArchived(path, [entry("w1", now.toISOString(), { agentTitle: "second" })], now);
+  recordArchived(path, [entry("w2", now.toISOString())], now);
   assert.deepEqual(readRegistry(path, now).map((e) => [e.workspaceId, e.agentTitle]), [["w1", "second"], ["w2", "title"]]);
   assert.equal(removeArchived(path, ["w1"], now), 1);
   assert.equal(removeArchived(path, ["nope"], now), 0);
@@ -110,7 +110,7 @@ test("registry replaces an entry for the same workspace and removes on restore",
 test("the restore CLI restores a recoverable workspace and drops its registry entry", (t) => {
   const w = world(t, { archived: true });
   const now = new Date();
-  recordArchived(w.registry, entry(WS, now.toISOString()), now);
+  recordArchived(w.registry, [entry(WS, now.toISOString())], now);
   // A fake Paseo client library, so the real CLI code runs against no daemon.
   const cli = join(w.root, "fake-cli");
   mkdirSync(join(cli, "dist", "utils"), { recursive: true });
@@ -134,9 +134,14 @@ export async function connectToDaemon() {
   assert.match(r.stdout, /restored, registry entry removed/);
   assert.deepEqual(readFileSync(log, "utf8").trim().split("\n"), [`inspect ${WS}`, `restore ${WS}`]);
   assert.deepEqual(readRegistry(w.registry, now), []);
-  const again = run("unavailable");
-  assert.match(again.stdout, /not restored: active/);
-  assert.equal(readFileSync(log, "utf8").trim().split("\n").length, 3);
+  recordArchived(w.registry, [entry(WS, now.toISOString())], now);
+  const still = run("unavailable"); // Paseo state still shows it archived
+  assert.match(still.stdout, /not restored: active$/m);
+  assert.equal(readRegistry(w.registry, now).length, 1);
+  writeWorkspaces(w.home, [{ workspaceId: WS, cwd: "/work/one", title: "Phone notes app", archivedAt: null }]);
+  const live = run("unavailable");
+  assert.match(live.stdout, /not restored: active, registry entry removed/);
+  assert.deepEqual(readRegistry(w.registry, now), []);
 });
 
 test("restoreWorkspace restores only what Paseo calls recoverable", async () => {
@@ -161,47 +166,79 @@ function closedItem(w: ReturnType<typeof world>, agent = AGENT, ws = WS) {
 
 const BLOCK_LINE = /"decision":"block","reason":"All pending items are closed\. End your reply with the line: Nothing further waiting on you\./;
 
-test("stop hook asks for the line once, then schedules the archive when the line is there", (t) => {
+/** Writes the tab's marker as if an earlier close was already handled. */
+function seed(w: ReturnType<typeof world>, agent = AGENT) {
+  mkdirSync(join(w.state, "paseo-tabs", "auto-archive"), { recursive: true });
+  writeFileSync(join(w.state, "paseo-tabs", "auto-archive", agent), "2000-01-01T00:00:00.000Z\n");
+}
+
+test("stop hook asks for the line, then schedules the archive 10 minutes out when it is the last line", (t) => {
   const w = world(t);
+  seed(w);
   closedItem(w);
   const without = hook(STOP, w.env, AGENT, { transcript_path: transcript(w.root, "All done.") });
   assert.equal(without.status, 0);
   assert.match(without.stdout, BLOCK_LINE);
   assert.deepEqual(w.calls(), []);
-  const withLine = hook(STOP, w.env, AGENT, { transcript_path: transcript(w.root, `All done.\n\n${LINE}`, "u.jsonl") });
+  const notLast = hook(STOP, w.env, AGENT, { transcript_path: transcript(w.root, `${LINE}\n\nOne more thing.`, "n.jsonl") });
+  assert.match(notLast.stdout, BLOCK_LINE);
+  const withLine = hook(STOP, w.env, AGENT, { transcript_path: transcript(w.root, `All done.\n\n${LINE}\n\n`, "u.jsonl") });
   assert.equal(withLine.stdout, "");
   const calls = w.calls();
   assert.equal(calls.length, 1);
-  assert.match(calls[0], /^systemd-run --user --quiet --collect --on-active=90 --unit=paseo-tabs-archive-aaaaaaa1 /);
-  assert.match(calls[0], /tools\/pending\.ts auto-archive --agent aaaaaaa1-full$/);
+  assert.match(calls[0], /^systemd-run --user --quiet --collect --on-active=600 --unit=paseo-tabs-archive-aaaaaaa1 /);
+  assert.match(calls[0], /tools\/pending\.ts auto-archive --agent aaaaaaa1-full --scheduled \d{4}-\d\d-\d\dT[\d:.]+Z$/);
   // Handled: the next turn end does nothing until another item closes.
   assert.equal(hook(STOP, w.env, AGENT, { transcript_path: transcript(w.root, "Hi.", "v.jsonl") }).stdout, "");
   assert.equal(w.calls().length, 1);
 });
 
-test("stop hook schedules on stop_hook_active even without the line, and reads last_assistant_message", (t) => {
+test("stop hook on stop_hook_active without the line does nothing and asks again next turn", (t) => {
   const a = world(t);
+  seed(a);
   closedItem(a);
+  const marker = join(a.state, "paseo-tabs", "auto-archive", AGENT);
+  const before = readFileSync(marker, "utf8");
   assert.equal(hook(STOP, a.env, AGENT, { transcript_path: transcript(a.root, "x"), stop_hook_active: true }).stdout, "");
+  assert.deepEqual(a.calls(), []);
+  assert.equal(readFileSync(marker, "utf8"), before);
+  assert.match(hook(STOP, a.env, AGENT, { transcript_path: transcript(a.root, "x") }).stdout, BLOCK_LINE);
+  // The line in last_assistant_message counts, active or not.
+  assert.equal(hook(STOP, a.env, AGENT, { transcript_path: transcript(a.root, "x"), stop_hook_active: true, last_assistant_message: LINE }).stdout, "");
   assert.equal(a.calls().length, 1);
-  const b = world(t);
-  closedItem(b);
-  assert.equal(hook(STOP, b.env, AGENT, { transcript_path: transcript(b.root, "x"), last_assistant_message: LINE }).stdout, "");
-  assert.equal(b.calls().length, 1);
+});
+
+test("stop hook seeds a tab it has never seen and acts only on later closes", (t) => {
+  const w = world(t);
+  closedItem(w);
+  const marker = join(w.state, "paseo-tabs", "auto-archive", AGENT);
+  assert.equal(hook(STOP, w.env, AGENT, { transcript_path: transcript(w.root, "x") }).stdout, "");
+  assert.equal(existsSync(marker), true);
+  assert.equal(hook(STOP, w.env, AGENT, { transcript_path: transcript(w.root, LINE) }).stdout, "");
+  assert.deepEqual(w.calls(), []);
+  addItem(w.dir, WS, "/c", AGENT, F, new Date());
+  finishItem(w.dir, WS, AGENT, "b", "done", null, new Date(Date.now() + 1000));
+  assert.match(hook(STOP, w.env, AGENT, { transcript_path: transcript(w.root, "x") }).stdout, BLOCK_LINE);
+  assert.equal(hook(STOP, w.env, AGENT, { transcript_path: transcript(w.root, LINE) }).stdout, "");
+  assert.equal(w.calls().length, 1);
 });
 
 test("stop hook does nothing with open items, no items ever, a sibling's open item, or no marker", (t) => {
   const open = world(t);
+  seed(open);
   addItem(open.dir, WS, "/c", AGENT, F, new Date());
   assert.equal(hook(STOP, open.env, AGENT, { transcript_path: transcript(open.root, LINE) }).stdout, "");
   const never = world(t);
+  seed(never);
   closedItem(never, "someone-else");
   assert.equal(hook(STOP, never.env, AGENT, { transcript_path: transcript(never.root, LINE) }).stdout, "");
   const sibling = world(t);
+  seed(sibling);
   closedItem(sibling);
   addItem(sibling.dir, WS, "/c", "bbbbbbb2-sibling", F, new Date());
   assert.equal(hook(STOP, sibling.env, AGENT, { transcript_path: transcript(sibling.root, LINE) }).stdout, "");
   const off = world(t, { marker: false });
+  seed(off);
   closedItem(off);
   assert.equal(hook(STOP, off.env, AGENT, { transcript_path: transcript(off.root, LINE) }).stdout, "");
   assert.equal(hook(STOP, open.env, undefined, { transcript_path: transcript(open.root, LINE) }).stdout, "");
@@ -230,6 +267,64 @@ test("auto-archive archives an idle workspace with nothing open and records it",
   assert.deepEqual(readRegistry(w.registry, now), [
     { workspaceId: WS, workspaceName: "Phone notes app", agentId: AGENT, agentTitle: "ZenNotes trial", cwd: "/work/one", archivedAt: now.toISOString() },
   ]);
+});
+
+test("auto-archive treats closed tabs as resting and records every tab of the workspace", async (t) => {
+  const w = world(t);
+  closedItem(w);
+  writeAgent(w.home, { id: "ccccccc3-other", cwd: "/work/one", workspaceId: WS, title: "Second tab" });
+  const archived: string[] = [];
+  const now = new Date("2026-11-27T12:00:00Z");
+  // The statuses Paseo reports: idle, closed (an unloaded idle tab), running.
+  const line = await autoArchive({ agentId: AGENT, dir: w.dir, home: w.home, registry: w.registry, runner: runner({ [AGENT]: "idle", "ccccccc3-other": "closed" }, archived), now });
+  assert.match(line, /archived/);
+  assert.deepEqual(archived, [WS]);
+  assert.deepEqual(
+    readRegistry(w.registry, now).map((e) => [e.agentId, e.agentTitle, e.workspaceName]).sort(),
+    [[AGENT, "ZenNotes trial", "Phone notes app"], ["ccccccc3-other", "Second tab", "Phone notes app"]],
+  );
+  writeWorkspaces(w.home, [{ workspaceId: WS, cwd: "/work/one", title: "Phone notes app", archivedAt: now.toISOString() }]);
+  assert.deepEqual(
+    findTabs(loadState(w.home), w.registry, "second", now).map((r) => [r.agentId, r.workspaceName, r.archived]),
+    [["ccccccc3-other", "Phone notes app", true]],
+  );
+});
+
+test("auto-archive skips when any tab got a message after the archive was scheduled", async (t) => {
+  const w = world(t);
+  closedItem(w);
+  const scheduledAt = new Date("2026-11-27T12:00:00Z");
+  writeAgent(w.home, { id: "ccccccc3-other", cwd: "/work/one", workspaceId: WS, lastUserMessageAt: "2026-11-27T12:05:00.000Z" });
+  const archived: string[] = [];
+  const args = { agentId: AGENT, dir: w.dir, home: w.home, registry: w.registry, now: new Date("2026-11-27T12:10:00Z"), scheduledAt };
+  const status = { [AGENT]: "idle", "ccccccc3-other": "idle" };
+  assert.match(await autoArchive({ ...args, runner: runner(status, archived) }), /ccccccc3-other got a message after the archive was scheduled/);
+  writeAgent(w.home, { id: "ccccccc3-other", cwd: "/work/one", workspaceId: WS, lastUserMessageAt: "2026-11-27T11:55:00.000Z" });
+  assert.match(await autoArchive({ ...args, runner: runner(status, archived) }), /archived/);
+  assert.deepEqual(archived, [WS]);
+});
+
+test("a failed archive keeps the registry entries only when Paseo shows the workspace archived", async (t) => {
+  const failing = (home: string, archiveIt: boolean): ControlRunner => ({
+    ...runner({ [AGENT]: "idle" }, []),
+    archive: async () => {
+      if (archiveIt) writeWorkspaces(home, [{ workspaceId: WS, cwd: "/work/one", title: "Phone notes app", archivedAt: "2026-11-27T12:00:00.000Z" }]);
+      throw new Error("timed out");
+    },
+  });
+  const a = world(t);
+  closedItem(a);
+  const now = new Date();
+  const base = { agentId: AGENT, dir: a.dir, home: a.home, registry: a.registry, now };
+  assert.match(await autoArchive({ ...base, runner: failing(a.home, false) }), /archive failed: timed out/);
+  assert.deepEqual(readRegistry(a.registry, now), []);
+  const b = world(t);
+  closedItem(b);
+  assert.match(
+    await autoArchive({ ...base, dir: b.dir, home: b.home, registry: b.registry, runner: failing(b.home, true) }),
+    /Paseo shows it archived, entries kept/,
+  );
+  assert.equal(readRegistry(b.registry, now).length, 1);
 });
 
 test("auto-archive re-checks: a new open item, a running tab, or an archived workspace stops it", async (t) => {
@@ -285,6 +380,7 @@ test("the reminder never restores an archived workspace", (t) => {
 
 test("stop hook schedules nothing when the workspace is already archived", (t) => {
   const w = world(t, { archived: true });
+  seed(w);
   closedItem(w);
   assert.equal(hook(STOP, w.env, AGENT, { transcript_path: transcript(w.root, "x") }).stdout, "");
   assert.equal(hook(STOP, w.env, AGENT, { transcript_path: transcript(w.root, LINE), stop_hook_active: true }).stdout, "");
@@ -318,8 +414,8 @@ test("adding a waiting item for an archived tab restores its workspace, a next i
 test("find matches live and archived tabs by name words and id prefix, and drops revived entries", (t) => {
   const w = world(t);
   const now = new Date();
-  recordArchived(w.registry, entry("wks_archived1", now.toISOString(), { workspaceName: "Kitchen tablet", agentTitle: "Kiosk page", agentId: "ddddddd4-x" }), now);
-  recordArchived(w.registry, entry(WS, now.toISOString()), now); // live again in Paseo
+  recordArchived(w.registry, [entry("wks_archived1", now.toISOString(), { workspaceName: "Kitchen tablet", agentTitle: "Kiosk page", agentId: "ddddddd4-x" })], now);
+  recordArchived(w.registry, [entry(WS, now.toISOString())], now); // live again in Paseo
   const state = loadState(w.home);
   assert.deepEqual(findTabs(state, w.registry, "phone zennotes", now).map((r) => [r.agentId, r.archived]), [[AGENT, false]]);
   assert.deepEqual(findTabs(state, w.registry, "kitchen", now).map((r) => [r.workspaceId, r.archived]), [["wks_archived1", true]]);

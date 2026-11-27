@@ -3,10 +3,13 @@
 // 1. When a tab did real work this turn (3 or more tool uses), touched no pending tool,
 //    and still has open items, block once so it reconciles its list.
 // 2. When every item in the tab's workspace is closed and one was closed since the last
-//    time this ran, the workspace is archived: first the tab is asked once to end with
-//    "Nothing further waiting on you.", then an archive is scheduled 90 s out, so the
-//    final message reaches the user first. The scheduled run checks everything again.
+//    time this ran, the workspace is archived: the tab is asked to end its reply with
+//    the line "Nothing further waiting on you."; once that is its last line, an archive
+//    is scheduled 10 minutes out, so the user can read and answer first. The scheduled
+//    run checks everything again, and skips if any tab got a message meanwhile.
 //    Skipped when the workspace is already archived (a message ran the tab there).
+//    A tab with no marker yet is only seeded with its newest close, so tabs whose items
+//    closed before this existed do not archive at their next turn.
 //
 // Never fails: any error means no output.
 
@@ -16,7 +19,7 @@ import { join } from "node:path";
 import { PENDING_CLI, agentWorkspace, openItemsForAgent, stateRoot, storeFiles, storeOn, workspaceArchived } from "./pending-lib.mjs";
 
 const LINE = "Nothing further waiting on you";
-const DELAY_S = 90;
+const DELAY_S = 600;
 
 function isPendingUse(block) {
   if (typeof block.name === "string" && block.name.includes("pending_")) return true;
@@ -66,12 +69,19 @@ function markerPath(agentId) {
   return join(stateRoot(), "paseo-tabs", "auto-archive", encodeURIComponent(agentId));
 }
 
+/** The newest close this tab already acted on; null when it has no marker yet. */
 function lastHandled(agentId) {
   try {
     return readFileSync(markerPath(agentId), "utf8").trim();
   } catch {
-    return "";
+    return null;
   }
+}
+
+/** True when the last non-empty line of the reply holds the ending line. */
+function endsWithLine(text) {
+  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  return lines.length > 0 && lines[lines.length - 1].toLowerCase().includes(LINE.toLowerCase());
 }
 
 function setHandled(agentId, stamp) {
@@ -80,7 +90,7 @@ function setHandled(agentId, stamp) {
 }
 
 function scheduleArchive(agentId) {
-  const args = [PENDING_CLI, "auto-archive", "--agent", agentId];
+  const args = [PENDING_CLI, "auto-archive", "--agent", agentId, "--scheduled", new Date().toISOString()];
   const setenv = ["PATH", "HOME", "XDG_STATE_HOME", "PASEO_HOME", "PASEO_CLI_ROOT"]
     .filter((k) => process.env[k])
     .map((k) => `--setenv=${k}=${process.env[k]}`);
@@ -108,16 +118,21 @@ function autoArchive(input, turn) {
     .reduce((a, b) => Math.max(a, b), 0);
   if (!latest) return null;
   const stamp = new Date(latest).toISOString();
-  if (lastHandled(agentId) === stamp) return null; // nothing closed since the last archive
+  const handled = lastHandled(agentId);
+  if (handled === null) {
+    setHandled(agentId, stamp); // first sight of this tab: seed, act on later closes only
+    return null;
+  }
+  if (handled === stamp) return null; // nothing closed since the last archive
   const ws = agentWorkspace(agentId);
   if (ws && workspaceArchived(ws)) return null; // a message ran this tab while archived: it stays archived
-  const said = lastAssistantText(input, turn).toLowerCase().includes(LINE.toLowerCase());
-  if (input.stop_hook_active !== true && !said) {
-    return "All pending items are closed. End your reply with the line: Nothing further waiting on you. This workspace is then archived automatically.";
+  if (endsWithLine(lastAssistantText(input, turn))) {
+    setHandled(agentId, stamp);
+    scheduleArchive(agentId);
+    return null;
   }
-  setHandled(agentId, stamp);
-  scheduleArchive(agentId);
-  return null;
+  if (input.stop_hook_active === true) return null; // asked already this turn; the next turn asks again
+  return "All pending items are closed. End your reply with the line: Nothing further waiting on you. This workspace is then archived automatically.";
 }
 
 try {

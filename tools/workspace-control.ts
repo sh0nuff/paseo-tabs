@@ -1,12 +1,15 @@
 // Restores or archives one Paseo workspace.
 //
 //   node tools/workspace-control.ts restore <workspaceId>   restores it when Paseo says it can, and
-//                                                           drops its entry from archived-tabs.json
+//                                                           drops its entries from archived-tabs.json once
+//                                                           it is restored or Paseo shows it live
 //   node tools/workspace-control.ts archive <workspaceId>   runs `paseo workspace archive <id>`
 //
 // Prints one line. On error prints the message, exit 1.
 
-import { readRegistry, registryPath, removeArchived } from "../server/archived-tabs.ts";
+import { registryPath, removeArchived } from "../server/archived-tabs.ts";
+import { isArchived } from "../server/auto-archive.ts";
+import { loadState, paseoHome } from "../server/paseo-state.ts";
 import { archiveWorkspace, paseoRunner, restoreWorkspace } from "../server/workspace-control.ts";
 
 const USAGE = "usage: workspace-control.ts <restore|archive> <workspaceId>";
@@ -23,7 +26,13 @@ async function main(): Promise<void> {
   const result = await restoreWorkspace(id, runner);
   const registry = registryPath(process.env);
   const now = new Date();
-  const dropped = readRegistry(registry, now).some((e) => e.workspaceId === id) ? removeArchived(registry, [id], now) : 0;
+  let live = false;
+  try {
+    live = !isArchived(loadState(paseoHome(process.env)), id);
+  } catch {
+    // keep the entries
+  }
+  const dropped = result === "restored" || live ? removeArchived(registry, [id], now) : 0;
   process.stdout.write(`${id}: ${result}${dropped ? ", registry entry removed" : ""}\n`);
 }
 

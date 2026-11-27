@@ -3,7 +3,8 @@
 //
 //   node tools/pending.ts <add|update|done|drop|reopen|list> --agent <id> [--workspace <id>]
 //        [--letter x] [--json '{...}'] [--note '...'] [--cwd <dir>] [--dir <store dir>] [--home <Paseo home>]
-//   node tools/pending.ts auto-archive --agent <id>     archive the agent's workspace if still nothing is open
+//   node tools/pending.ts auto-archive --agent <id> [--scheduled <iso time>]
+//                                                       archive the agent's workspace if still nothing is open
 //   node tools/pending.ts find <words...>                tabs to hand work to, one JSON line each
 //
 // Without --workspace, the agent's workspace comes from Paseo's own records (--home, else
@@ -20,7 +21,7 @@ import { paseoRunner, runRestore } from "../server/workspace-control.ts";
 
 const USAGE =
   "usage: pending.ts <add|update|done|drop|reopen|list> --agent <id> [--workspace <id>] [--letter x] [--json '{...}'] [--note '...'] [--cwd <dir>] [--home <Paseo home>]\n" +
-  "       pending.ts auto-archive --agent <id>\n" +
+  "       pending.ts auto-archive --agent <id> [--scheduled <iso time>]\n" +
   "       pending.ts find <words...>";
 const COMMANDS = ["add", "update", "done", "drop", "reopen", "list", "auto-archive", "find"];
 
@@ -36,6 +37,7 @@ async function main(): Promise<void> {
       cwd: { type: "string" },
       dir: { type: "string" },
       home: { type: "string" },
+      scheduled: { type: "string" },
     },
   });
   const [command, ...words] = positionals;
@@ -54,7 +56,9 @@ async function main(): Promise<void> {
     return value;
   };
   if (command === "auto-archive") {
-    const line = await autoArchive({ agentId: need("agent"), dir, home, registry: registryPath(process.env), runner: paseoRunner(process.env), now });
+    const scheduledAt = values.scheduled ? new Date(values.scheduled) : undefined;
+    if (scheduledAt && Number.isNaN(scheduledAt.getTime())) throw new Error(`--scheduled is not a time: ${values.scheduled}`);
+    const line = await autoArchive({ agentId: need("agent"), dir, home, registry: registryPath(process.env), runner: paseoRunner(process.env), now, scheduledAt });
     process.stderr.write(`${line}\n`);
     return;
   }
