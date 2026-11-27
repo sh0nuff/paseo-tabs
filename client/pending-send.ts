@@ -2,17 +2,21 @@
 export interface SenderAgent {
   refresh(): Promise<unknown>;
   status: string | null;
-  send(text: string, options?: { activeTurnBehavior: "steer" }): Promise<unknown>;
+  /** Number of open permission requests or questions on the agent (0 or missing: none). */
+  pendingPermissions?: number;
+  send(text: string, options?: { activeTurnBehavior: "steer" | "interrupt" }): Promise<unknown>;
 }
 
 /**
- * Sends text at once. The status is refreshed one time: a running tab gets the message steered
+ * Sends text at once. The status is refreshed one time: a tab with an open question is interrupted (the pick supersedes it), a running tab gets the message steered
  * into its turn (a plain send from a user client would interrupt it), any other status gets a
  * plain send. A failed refresh rejects and nothing is sent.
  */
 export async function sendNow(agent: SenderAgent, text: string): Promise<void> {
   await agent.refresh();
-  if (agent.status === "running") await agent.send(text, { activeTurnBehavior: "steer" });
+  // A turn stopped on a pending question never sees a steered message, so the pick interrupts it.
+  if ((agent.pendingPermissions ?? 0) > 0) await agent.send(text, { activeTurnBehavior: "interrupt" });
+  else if (agent.status === "running") await agent.send(text, { activeTurnBehavior: "steer" });
   else await agent.send(text);
 }
 

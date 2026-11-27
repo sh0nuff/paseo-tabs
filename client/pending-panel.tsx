@@ -115,11 +115,14 @@ export function PendingPanel({ theme, layout, workspaceId, navigation }: PluginW
       // A handle's properties may be a snapshot, so read the status from current() after a refresh.
       const adapter = {
         status: null as string | null,
+        pendingPermissions: 0,
         async refresh() {
           await ref.refresh();
-          adapter.status = ref.current()?.status ?? null;
+          const current = ref.current();
+          adapter.status = current?.status ?? null;
+          adapter.pendingPermissions = current?.pendingPermissions?.length ?? 0;
         },
-        send: (body: string, options?: { activeTurnBehavior: "steer" }) => ref.send(body, options),
+        send: (body: string, options?: { activeTurnBehavior: "steer" | "interrupt" }) => ref.send(body, options),
       };
       try {
         await sendPicked(adapter, message, () => unpick({ workspaceId, agentId: card.agentId, letter: card.letter }));

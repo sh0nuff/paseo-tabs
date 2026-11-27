@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { sendNow, sendPicked, type SenderAgent } from "../client/pending-send.ts";
 
-function fakeAgent(status: string | null, opts: { failRefresh?: boolean; failSend?: boolean } = {}) {
+function fakeAgent(status: string | null, opts: { failRefresh?: boolean; failSend?: boolean; pending?: number } = {}) {
   const sent: { text: string; options?: unknown }[] = [];
   let refreshes = 0;
   const agent: SenderAgent & { sent: typeof sent; refreshes: () => number } = {
@@ -13,6 +13,7 @@ function fakeAgent(status: string | null, opts: { failRefresh?: boolean; failSen
       refreshes += 1;
       if (opts.failRefresh) throw new Error("offline");
       agent.status = status;
+      agent.pendingPermissions = opts.pending ?? 0;
     },
     async send(text, options) {
       if (opts.failSend) throw new Error("send failed");
@@ -27,6 +28,12 @@ test("running tab gets a steered send", async () => {
   await sendNow(agent, "hi");
   assert.deepEqual(agent.sent, [{ text: "hi", options: { activeTurnBehavior: "steer" } }]);
   assert.equal(agent.refreshes(), 1);
+});
+
+test("running tab with a pending question gets an interrupting send", async () => {
+  const agent = fakeAgent("running", { pending: 1 });
+  await sendNow(agent, "hi");
+  assert.deepEqual(agent.sent, [{ text: "hi", options: { activeTurnBehavior: "interrupt" } }]);
 });
 
 test("idle tab gets a plain send with no options", async () => {
