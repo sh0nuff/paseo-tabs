@@ -439,3 +439,25 @@ test("pending_find answers with JSON lines", async (t) => {
   assert.equal(JSON.parse(out.text).agentTitle, "ZenNotes trial");
   assert.equal((await exec({ query: "nothing-like-it" }, {})).text, "No matching tabs.");
 });
+
+test("findTabs: hand-archived workspaces within 30 days are found by title and id prefix, older ones are not, registry wins", (t) => {
+  const root = tempDir(t);
+  const home = makeHome(root);
+  const registry = join(root, "archived-tabs.json");
+  const now = new Date("2026-11-27T12:00:00.000Z");
+  writeWorkspaces(home, [
+    { workspaceId: "wks_hand5", cwd: "/w/a", title: "Hand archived", archivedAt: "2026-11-22T12:00:00.000Z" },
+    { workspaceId: "wks_hand40", cwd: "/w/b", title: "Ancient one", archivedAt: "2026-10-18T12:00:00.000Z" },
+  ]);
+  writeAgent(home, { id: "29d48d65-aaaa", cwd: "/w/a", workspaceId: "wks_hand5", title: "Hand tab" });
+  writeAgent(home, { id: "40404040-bbbb", cwd: "/w/b", workspaceId: "wks_hand40", title: "Old tab" });
+  const state = loadState(home);
+  const byTitle = findTabs(state, registry, "hand archived", now);
+  assert.deepEqual(byTitle.map((r) => [r.agentId, r.workspaceName, r.archived, r.archivedAt]), [["29d48d65-aaaa", "Hand archived", true, "2026-11-22T12:00:00.000Z"]]);
+  assert.deepEqual(findTabs(state, registry, "29d48d6", now).map((r) => r.agentId), ["29d48d65-aaaa"]);
+  assert.deepEqual(findTabs(state, registry, "ancient", now), []);
+  assert.deepEqual(findTabs(state, registry, "40404040", now), []);
+  recordArchived(registry, [{ workspaceId: "wks_hand5", workspaceName: "Registry name", agentId: "29d48d65-aaaa", agentTitle: "Hand tab", cwd: "/w/a", archivedAt: "2026-11-23T12:00:00.000Z" }], now);
+  const both = findTabs(state, registry, "29d48d6", now);
+  assert.deepEqual(both.map((r) => [r.agentId, r.workspaceName]), [["29d48d65-aaaa", "Registry name"]]);
+});

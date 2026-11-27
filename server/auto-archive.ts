@@ -2,7 +2,7 @@
 // (active or archived by this plugin) to hand work to.
 
 import { type PaseoState, loadState } from "./paseo-state.ts";
-import { type ArchivedTab, readRegistry, recordArchived, removeArchived } from "./archived-tabs.ts";
+import { type ArchivedTab, STALE_MS, readRegistry, recordArchived, removeArchived } from "./archived-tabs.ts";
 import { readActivity, recentDictation } from "./activity.ts";
 import { readPending } from "./pending-store.ts";
 import { type ControlRunner, archiveWorkspace } from "./workspace-control.ts";
@@ -143,6 +143,22 @@ export function findTabs(state: PaseoState, registry: string, query: string, now
   for (const e of entries) {
     if (live.has(e.workspaceId)) continue;
     rows.push({ workspaceId: e.workspaceId, workspaceName: e.workspaceName, agentId: e.agentId, agentTitle: e.agentTitle, archived: true, archivedAt: e.archivedAt });
+  }
+  // Workspaces archived by hand are in Paseo's records but not the registry: search those too.
+  const seen = new Set(rows.filter((r) => r.archived).map((r) => r.agentId));
+  const recent = (iso: string | null) => {
+    const at = iso ? Date.parse(iso) : NaN;
+    return Number.isFinite(at) && now.getTime() - at <= STALE_MS;
+  };
+  for (const ws of state.workspaces) {
+    if (!ws.archivedAt || live.has(ws.id)) continue;
+    for (const a of state.agents.filter((x) => x.workspaceId === ws.id)) {
+      if (seen.has(a.id)) continue;
+      const at = recent(ws.archivedAt) ? ws.archivedAt : recent(a.archivedAt) ? a.archivedAt : null;
+      if (!at) continue;
+      seen.add(a.id);
+      rows.push({ workspaceId: ws.id, workspaceName: ws.title ?? "", agentId: a.id, agentTitle: a.title ?? "", archived: true, archivedAt: at });
+    }
   }
   return rows.filter((r) => matches(r, words));
 }
