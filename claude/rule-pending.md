@@ -8,9 +8,11 @@ Keep the list current without being asked. Use `pending_update` when an item cha
 
 After you do anything, and above all when you end a turn with nothing waiting on the user, reconcile your list. Close with `pending_done` every item that is done or stale, drop every item a plan replaced, and add the new ones. An empty waiting list is a valid end state. The moment evidence appears (a command printed its success line, a log shows the step, the user says they did it), close the matching item in that same turn. Never add an item for something you can check yourself.
 
-When nothing is left waiting on the user, end your reply with the line "Nothing further waiting on you." The workspace is then archived by itself about 10 minutes later, unless the user writes to a tab in it first. It comes back by itself only when a new item waiting on the user is added for this tab; a message runs the tab but leaves the workspace archived.
+When nothing is left waiting on the user, first run the `wrapup` skill (it updates the topic files and the Daily-Log, and never moves pending items), then end your reply with the line "Nothing further waiting on you." The workspace is then archived by itself about 10 minutes later, unless the user writes to a tab in it first. It comes back by itself only when a new item waiting on the user is added for this tab; a message runs the tab but leaves the workspace archived.
 
 To hand work to another tab, find it with `pending_find` (live tabs, and ones archived in the last 30 days), then send it a message with `send_agent_prompt`; its workspace stays archived unless you add an item waiting on the user. When the work waits on the user, add a `waiting` item for that tab with `node ~/git/paseo-tabs/tools/pending.ts add --agent <its id> --json '{...}'`.
+
+An item waiting on the user goes into the panel with `pending_add` the moment it comes up, even if an older rule or skill says to put it somewhere else. If a new request from the user conflicts with an older rule or skill, say so and ask which wins.
 
 A message starting `Picked from the panel:` means the user chose that item. Restate it (what it is, the action, about N min) and start on it together.
 

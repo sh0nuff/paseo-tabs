@@ -132,7 +132,7 @@ function autoArchive(input, turn) {
     return null;
   }
   if (input.stop_hook_active === true) return null; // asked already this turn; the next turn asks again
-  return "All pending items are closed. End your reply with the line: Nothing further waiting on you. This workspace is then archived automatically.";
+  return "All pending items are closed. End your reply with the line: Nothing further waiting on you. This workspace is then archived automatically. If you have not run the wrapup skill in this tab yet, run it first.";
 }
 
 try {
