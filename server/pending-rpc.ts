@@ -26,6 +26,10 @@ export function pickMessage(card: PendingCard): string {
   );
 }
 
+export function doneMessage(card: PendingCard): string {
+  return `Done from the panel: ${sentence(card.what, "untitled")}. The user says this is finished. (item ${card.letter})`;
+}
+
 function byCreated(a: PendingItem, b: PendingItem): number {
   return Date.parse(a.created) - Date.parse(b.created);
 }
@@ -38,9 +42,9 @@ export function pendingListHandler(dir: string, workspaceId: string): { items: P
   return { items: openWaiting(readPending(dir, workspaceId).items).map(toCard) };
 }
 
-export function pendingPickHandler(dir: string, workspaceId: string, agentId: string, letter: string, now: Date): { message: string } {
+export function pendingPickHandler(dir: string, workspaceId: string, agentId: string, letter: string, now: Date, done = false): { message: string } {
   const item = setPicked(dir, workspaceId, agentId, letter, now);
-  return { message: pickMessage(toCard(item)) };
+  return { message: done ? doneMessage(toCard(item)) : pickMessage(toCard(item)) };
 }
 
 export function pendingUnpickHandler(dir: string, workspaceId: string, agentId: string, letter: string): { ok: boolean } {

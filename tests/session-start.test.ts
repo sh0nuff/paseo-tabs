@@ -109,6 +109,8 @@ test("with the cutover marker, prints the pending rule with the ids filled", (t)
 
   assert.match(rule, /pending_add/);
   assert.match(rule, /Picked from the panel:/);
+  assert.match(rule, /A message starting `Done from the panel:` means the user has finished that item\./);
+  assert.match(rule, /keep it open\./);
   assert.match(rule, /`abcdef1234-5678`/);
   assert.doesNotMatch(rule, /TABS\.md/);
   assert.doesNotMatch(rule, /\{\{/);

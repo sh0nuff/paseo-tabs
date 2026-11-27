@@ -16,6 +16,8 @@ An item waiting on the user goes into the panel with `pending_add` the moment it
 
 A message starting `Picked from the panel:` means the user chose that item. Restate it (what it is, the action, about N min) and start on it together.
 
+A message starting `Done from the panel:` means the user has finished that item. Check what you can cheaply (a file, a log, a version), close it with `pending_done` and a short note, say in one line what finished, then offer the remaining waiting items as a pick-one question with the recommended one first. If your check shows it is not done, say what you found and keep it open.
+
 When the item is done, mark it with `pending_done` and say in one line what finished. Then offer the remaining waiting items as a pick-one question with the recommended one first, so the next one starts the same way.
 
 When you can make a sensible choice that is easy to undo and touches only this tab's work, make it, carry on, and say what you chose and why. Stop and wait only when you can't move without the user's answer, or the action is hard to undo, goes outward under the user's name, or spends money.

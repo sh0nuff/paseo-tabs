@@ -16,6 +16,7 @@ export function PendingPanel({ theme, layout, workspaceId, navigation }: PluginW
   const queryClient = useQueryClient();
   // "waiting": send queued for the tab. "sent": the message went out.
   const [queued, setQueued] = useState<Record<string, "waiting" | "sent" | undefined>>({});
+  const [doneTicked, setDoneTicked] = useState<Record<string, boolean | undefined>>({});
   const [failure, setFailure] = useState<string | null>(null);
   const [text, setText] = useState("");
   const term = text.trim();
@@ -91,7 +92,7 @@ export function PendingPanel({ theme, layout, workspaceId, navigation }: PluginW
     setFailure(null);
     try {
       // The RPC marks the item picked and returns the message; sending comes after.
-      const { message } = await pick({ workspaceId, agentId: card.agentId, letter: card.letter });
+      const { message } = await pick({ workspaceId, agentId: card.agentId, letter: card.letter, ...(doneTicked[cardKey(card)] ? { done: true } : {}) });
       setQueued((q) => ({ ...q, [cardKey(card)]: "waiting" }));
       void queryClient.invalidateQueries({ queryKey: ["paseo-pending", workspaceId] });
       const ref = paseo.agents.ref(card.agentId);
@@ -185,6 +186,14 @@ export function PendingPanel({ theme, layout, workspaceId, navigation }: PluginW
           >
             <View style={[styles.radio, card.picked || waiting ? styles.radioOn : null]} />
             <View style={styles.body}>
+              <Pressable
+                accessibilityRole="checkbox"
+                accessibilityLabel="Done already"
+                accessibilityState={{ checked: doneTicked[cardKey(card)] === true }}
+                onPress={() => setDoneTicked((d) => ({ ...d, [cardKey(card)]: !d[cardKey(card)] }))}
+              >
+                <Text style={styles.line}>{`${doneTicked[cardKey(card)] ? "[x]" : "[ ]"} Done already`}</Text>
+              </Pressable>
               <Text style={styles.what}>{card.what}</Text>
               <Text style={styles.line}>{`Action: ${card.action || "ask the tab"}`}</Text>
               <Text style={styles.line}>{`About ${card.minutes} min`}</Text>

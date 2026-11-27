@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { addItem } from "../server/pending-store.ts";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { pendingEnabledHandler, pendingListHandler, pendingPickHandler, pendingSearchHandler, pendingUnpickHandler, pickMessage, storeMode } from "../server/pending-rpc.ts";
+import { pendingEnabledHandler, pendingListHandler, pendingPickHandler, pendingSearchHandler, pendingUnpickHandler, doneMessage, pickMessage, storeMode } from "../server/pending-rpc.ts";
 import { makeHome, tempDir, writeWorkspaces } from "./helpers.ts";
 
 const T0 = new Date("2026-11-26T12:00:00.000Z");
@@ -17,6 +17,15 @@ test("pickMessage uses the exact format and fallbacks", () => {
     "Picked from the panel: Install the Jellyfin app on the TV. Action: Open Play Store on the TV, search Jellyfin, sign in. About 5 min. Why: The TV can't play the new library without it. (item c)",
   );
   assert.match(pickMessage({ ...card, action: "", why: "" }), /Action: ask the tab\. About 5 min\. Why: not given\. \(item c\)$/);
+});
+
+test("doneMessage exact text, and pick with done marks picked", (t) => {
+  const card = { agentId: "A", letter: "c", what: "Install the app.", action: "x", minutes: 5, why: "y", created: "2026-11-26T12:00:00+00:00", picked: false, status: "open" as const };
+  assert.equal(doneMessage(card), "Done from the panel: Install the app. The user says this is finished. (item c)");
+  const dir = tempDir(t);
+  addItem(dir, "w", "/c", "A", W, T0);
+  assert.equal(pendingPickHandler(dir, "w", "A", "a", T0, true).message, "Done from the panel: Install the Jellyfin app on the TV. The user says this is finished. (item a)");
+  assert.equal(pendingListHandler(dir, "w").items[0].picked, true);
 });
 
 test("list omits next items, orders oldest first, spans tabs", (t) => {

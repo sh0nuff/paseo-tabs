@@ -25,7 +25,7 @@ export const pendingList = defineRpc({
 /** Marks one item picked and returns the message to send to its tab. */
 export const pendingPick = defineRpc({
   name: "pending.pick",
-  input: z.object({ workspaceId: z.string(), agentId: z.string(), letter: z.string() }),
+  input: z.object({ workspaceId: z.string(), agentId: z.string(), letter: z.string(), done: z.boolean().optional() }),
   output: z.object({ message: z.string() }),
 });
 

@@ -64,7 +64,7 @@ export default function contribute(server: PluginServerContext) {
   server.handle(tabsLines, () => ({ lines: lines() }));
   const store = pendingDir(process.env);
   server.handle(pendingList, ({ workspaceId }) => pendingListHandler(store, workspaceId));
-  server.handle(pendingPick, ({ workspaceId, agentId, letter }) => pendingPickHandler(store, workspaceId, agentId, letter, new Date()));
+  server.handle(pendingPick, ({ workspaceId, agentId, letter, done }) => pendingPickHandler(store, workspaceId, agentId, letter, new Date(), done === true));
   server.handle(pendingUnpick, ({ workspaceId, agentId, letter }) => pendingUnpickHandler(store, workspaceId, agentId, letter));
   server.handle(pendingEnabled, () => pendingEnabledHandler(store));
   server.handle(pendingSearch, ({ query }) => pendingSearchHandler(store, home, query));
