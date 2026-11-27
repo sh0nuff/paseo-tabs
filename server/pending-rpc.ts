@@ -53,6 +53,11 @@ export function cutoverMarker(dir: string): string {
   return join(dir, "cutover");
 }
 
+/** True when the pending store is the source: the setting, or the cut-over marker, checked at use time. */
+export function storeMode(display: { pendingStore?: boolean }, dir: string): boolean {
+  return display.pendingStore === true || existsSync(cutoverMarker(dir));
+}
+
 export function pendingEnabledHandler(dir: string): { enabled: boolean } {
   return { enabled: existsSync(cutoverMarker(dir)) };
 }

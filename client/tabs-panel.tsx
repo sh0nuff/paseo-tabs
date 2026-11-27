@@ -2,6 +2,7 @@ import { type PluginWorkspacePanelProps, useRpc, useSettings } from "@getpaseo/p
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
+import { pendingEnabled } from "../shared/pending-rpc.ts";
 import { displaySettings } from "../shared/settings.ts";
 import { PendingPanel } from "./pending-panel.tsx";
 import { statusColours } from "./palettes.ts";
@@ -18,7 +19,14 @@ function summary(tab: TabRow): string {
 
 export function TabsPanel(props: PluginWorkspacePanelProps) {
   const settings = useSettings(displaySettings);
-  if (settings.status === "ready" && settings.values.pendingStore) return <PendingPanel {...props} />;
+  const checkEnabled = useRpc(pendingEnabled);
+  // The cut-over marker counts as the setting being on.
+  const marker = useQuery({
+    queryKey: ["paseo-pending-enabled"],
+    queryFn: () => checkEnabled({}),
+    refetchInterval: 30_000,
+  });
+  if ((settings.status === "ready" && settings.values.pendingStore) || marker.data?.enabled === true) return <PendingPanel {...props} />;
   return <TabsList {...props} />;
 }
 

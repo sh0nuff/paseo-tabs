@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { addItem } from "../server/pending-store.ts";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { pendingEnabledHandler, pendingListHandler, pendingPickHandler, pendingSearchHandler, pendingUnpickHandler, pickMessage } from "../server/pending-rpc.ts";
+import { pendingEnabledHandler, pendingListHandler, pendingPickHandler, pendingSearchHandler, pendingUnpickHandler, pickMessage, storeMode } from "../server/pending-rpc.ts";
 import { makeHome, tempDir, writeWorkspaces } from "./helpers.ts";
 
 const T0 = new Date("2026-11-26T12:00:00.000Z");
@@ -66,4 +66,14 @@ test("pending.enabled follows the cutover marker", (t) => {
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "cutover"), "");
   assert.deepEqual(pendingEnabledHandler(dir), { enabled: true });
+});
+
+test("storeMode is on for the setting or the marker, off for neither", (t) => {
+  const dir = join(tempDir(t), "pending");
+  assert.equal(storeMode({}, dir), false);
+  assert.equal(storeMode({ pendingStore: false }, dir), false);
+  assert.equal(storeMode({ pendingStore: true }, dir), true);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "cutover"), "");
+  assert.equal(storeMode({ pendingStore: false }, dir), true);
 });

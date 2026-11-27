@@ -55,6 +55,8 @@ export interface DisplayOptions {
   workspaceOrder: "newest" | "latestMessage";
   /** Finished items leave a day after they were ticked. Only false turns this off. */
   removeFinished: boolean;
+  /** Show the pending store everywhere. The cut-over marker turns this on as well, see storeMode. */
+  pendingStore?: boolean;
 }
 
 export const DEFAULT_DISPLAY: DisplayOptions = {

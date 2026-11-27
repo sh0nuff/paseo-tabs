@@ -5,7 +5,8 @@ import { join } from "node:path";
 import type { PaseoState } from "../server/paseo-state.ts";
 import type { PendingFile } from "../server/pending-store.ts";
 import { renderView } from "../server/pending-view.ts";
-import { syncAll } from "../server/watcher.ts";
+import { setTimeout as sleep } from "node:timers/promises";
+import { startWatcher, syncAll } from "../server/watcher.ts";
 import { DEFAULT_DISPLAY } from "../server/tabs-file.ts";
 import { gitInit, makeHome, tempDir, writeAgent, writeWorkspaces } from "./helpers.ts";
 
@@ -107,4 +108,20 @@ test("a closed tab moved out and then reactivated has one block in TABS.md and n
   assert.equal(tabs.match(/· bbbbbbb/g)?.length, 1);
   assert.match(tabs, /item b/);
   assert.doesNotMatch(readFileSync(join(repo, "TABS-DONE.md"), "utf8"), /bbbbbbb/);
+});
+
+test("the watcher renders the view once only the cut-over marker exists, without a restart", async (t) => {
+  const { home, repo, dir } = repoWithStore(t);
+  writeAgent(home, { id: "aaaaaaa1", cwd: repo });
+  writeFileSync(join(dir, "wks_1111111aaaaaaa.json"), JSON.stringify({ workspaceId: "wks_1111111aaaaaaa", cwd: repo, highest: {}, items: [item("aaaaaaa1", "a", "open")] }));
+  writeFileSync(join(repo, "TABS.md"), "## 1. A title · aaaaaaa\n\n**Waiting on you**\n- z) [ ] typed by hand\n");
+  const watcher = startWatcher(home, { intervalMs: 50, pendingDir: dir });
+  t.after(watcher.stop);
+  assert.match(readFileSync(join(repo, "TABS.md"), "utf8"), /typed by hand/);
+  writeFileSync(join(dir, "cutover"), "");
+  await sleep(500);
+  const text = readFileSync(join(repo, "TABS.md"), "utf8");
+  assert.match(text, /Read-only view/);
+  assert.match(text, /item a/);
+  assert.doesNotMatch(text, /typed by hand/);
 });

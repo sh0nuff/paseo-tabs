@@ -1,7 +1,7 @@
 import type { PluginServerContext } from "@getpaseo/plugin/server";
 import { ItemClock, clockPath } from "./server/item-clock.ts";
 import { paseoHome } from "./server/paseo-state.ts";
-import { pendingEnabledHandler, pendingListHandler, pendingPickHandler, pendingSearchHandler, pendingUnpickHandler } from "./server/pending-rpc.ts";
+import { pendingEnabledHandler, storeMode, pendingListHandler, pendingPickHandler, pendingSearchHandler, pendingUnpickHandler } from "./server/pending-rpc.ts";
 import { pendingDir } from "./server/pending-store.ts";
 import { pendingToolsHook } from "./server/pending-tools.ts";
 import { DEFAULT_DISPLAY, type DisplayOptions } from "./server/tabs-file.ts";
@@ -49,7 +49,7 @@ export default function contribute(server: PluginServerContext) {
   // The tools and the panel stay off until the cut-over marker exists.
   server.addHook("agent.open.before", pendingToolsHook(pendingDir(process.env)));
 
-  const pendingOn = () => (display as DisplayOptions & { pendingStore?: boolean }).pendingStore === true;
+  const pendingOn = () => storeMode(display, pendingDir(process.env));
   server.handle(tabsList, ({ workspaceId }) => ({
     tabs: pendingOn()
       ? storeTabRows(home, pendingDir(process.env), workspaceId, new Date(), display)

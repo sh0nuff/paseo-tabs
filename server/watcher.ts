@@ -4,12 +4,13 @@
 // the display settings change, when a waiting item reaches the overdue limit, or
 // when a finished item has been ticked for a day.
 
-import { readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { syncFolder } from "./folder-sync.ts";
 import type { ItemClock } from "./item-clock.ts";
 import { loadState, stateFingerprint } from "./paseo-state.ts";
 import { allFiles } from "./pending-store.ts";
+import { cutoverMarker, storeMode } from "./pending-rpc.ts";
 import { renderView } from "./pending-view.ts";
 import { DEFAULT_DISPLAY, type DisplayOptions, TICKED_KEEP_MS, shortAgentId } from "./tabs-file.ts";
 
@@ -30,7 +31,7 @@ export function syncAll(
       : undefined;
   const results: Record<string, string> = {};
   // With the pending store on, TABS.md is a read-only view of it. A store that cannot be read leaves every file alone.
-  const store = pendingDir !== undefined && (display as DisplayOptions & { pendingStore?: boolean }).pendingStore === true;
+  const store = pendingDir !== undefined && storeMode(display, pendingDir);
   let files: ReturnType<typeof allFiles> | null = null;
   if (store) {
     try {
@@ -113,8 +114,10 @@ export function startWatcher(
         parts.push(`${cwd}:none`);
       }
     }
+    // The cut-over marker appearing turns the store on, so it is watched even while the setting is off.
+    if (pendingDir !== undefined) parts.push(`cutover:${existsSync(cutoverMarker(pendingDir))}`);
     // The store's files are part of what is watched while TABS.md is generated from it.
-    if (pendingDir !== undefined && (display() as DisplayOptions & { pendingStore?: boolean }).pendingStore === true) {
+    if (pendingDir !== undefined && storeMode(display(), pendingDir)) {
       try {
         for (const name of readdirSync(pendingDir).sort()) {
           const info = statSync(join(pendingDir, name));
@@ -139,7 +142,7 @@ export function startWatcher(
       folders = Object.keys(syncAll(home, now, options, clock, pendingDir));
       const overdueAt = clock?.nextDue(options.overdueAfterDays, now.getTime()) ?? null;
       const expiresAt = options.removeFinished !== false ? clock?.nextTickExpiry(TICKED_KEEP_MS, now.getTime()) ?? null : null;
-      const leavesAt = pendingDir !== undefined && (options as DisplayOptions & { pendingStore?: boolean }).pendingStore === true ? nextViewExpiry(pendingDir, now.getTime()) : null;
+      const leavesAt = pendingDir !== undefined && storeMode(options, pendingDir) ? nextViewExpiry(pendingDir, now.getTime()) : null;
       const times = [overdueAt, expiresAt, leavesAt].filter((time): time is number => time !== null);
       due = times.length === 0 ? null : Math.min(...times);
     } catch (error) {
