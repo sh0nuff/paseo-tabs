@@ -1,37 +1,23 @@
 # paseo-tabs
 
-paseo-tabs keeps a live checklist of every [Paseo](https://paseo.sh) tab in a `TABS.md` file at the top of your repository, and adds a Tabs panel that jumps to any tab.
+paseo-tabs adds a Pending panel to [Paseo](https://paseo.sh): one list per workspace of everything its Claude tabs are waiting on you for. Each tab keeps its own items current with a few agent tools, so you can see what needs you without scrolling back through every chat, pick the next item with one tap, and tell a tab an item is done.
 
-<img src="assets/panel.png" width="560" alt="The Tabs panel listing four open tabs with red, orange, blue and green dots, and one closed tab">
+<img src="assets/panel.png" width="560" alt="The Pending panel">
 
-Each tab gets a section headed by a dot showing where it stands, its number in the tab bar, its name and a short ID. The agent in that tab keeps the section current: what it is waiting on you for, its next steps, and what it has done. Items are lettered, so you can say "2b" for tab 2, item b. Keep `TABS.md` open beside a chat and you can see where every tab stands without scrolling back through each one.
+Each card in the panel shows four lines:
 
-```markdown
-## 🟠 1. Fix the login redirect · 3f9c2a1
+- what the item is, in bold
+- the action, what you do
+- about how many minutes your part takes
+- how long it has waited ("Waiting since today", "Waiting 3 days"), and why it matters when the tab gave a reason
 
-### About this tab
-Why the login page loops back to itself after a password reset.
+Tap a card to pick it: the tab gets a message starting `Picked from the panel:` and starts on it with you. "Mark done" under a card tells the tab you finished it; the tab checks what it can and closes the item. A search box under the cards finds open items in every workspace and opens the workspace you tap. Each workspace's row in Paseo's sidebar also gets a line with its most urgent tab and the first item waiting on you.
 
-Last updated 2026-10-24 16:59
-
-**Waiting on you**
-- c) [ ] Try a reset on staging and say whether it still loops.
-
-**Claude's next steps**
-- d) [ ] Add a test for the reset path.
-
-**Done**
-- a) [x] ~~Found the cause: the reset token is checked twice.~~
-- b) [x] ~~Fixed the second check, commit 41d0e7b.~~
-```
-
-`TABS.md` is plain Markdown, so you can read and change it outside Paseo too, in any text editor or in Obsidian. To tick an item, put an x in its box. While the Paseo daemon runs, the plugin notices the edit within a couple of seconds and updates the tab's dot. The dots are written into the file, red ones included, so they show wherever you open it. The file holds no dates, which keeps it easy to edit by hand. The plugin keeps item ages in a small file of its own, outside `TABS.md` and outside Paseo.
-
-The repository holds two plugins. The Paseo plugin keeps every `TABS.md` in step with your tabs and adds the Tabs panel. The Claude Code plugin gives each Claude tab the rule for its section when it starts.
+The repository holds two plugins that work together: a Paseo plugin (the panel, the sidebar line, the agent tools and the store) and a Claude Code plugin (the rule each Claude tab gets, and two hooks that keep its list honest).
 
 ## Install
 
-You need Paseo 0.11.0 or later, for both the daemon and the app, with your tabs running Claude Code. You also need plugins turned on in Paseo, under Settings, Plugins. The line on each workspace's row in the sidebar needs Paseo 0.16.0 or later in the app. Older apps get everything else.
+You need Paseo 0.17.0 or later for both the daemon and the app, plugins turned on under Settings, Plugins, and tabs running Claude Code. The command-line helper the tabs fall back to needs Node 22.18 or later.
 
 Install the Paseo plugin from a shell on the machine that runs the Paseo daemon:
 
@@ -39,14 +25,14 @@ Install the Paseo plugin from a shell on the machine that runs the Paseo daemon:
 paseo plugin install github:sh0nuff/paseo-tabs
 ```
 
-Then install the Claude Code plugin, inside Claude Code:
+Then install the Claude Code plugin, inside Claude Code on the same machine:
 
 ```
 /plugin marketplace add sh0nuff/paseo-tabs
 /plugin install paseo-tabs@paseo-tabs
 ```
 
-New tabs get the rule as they start. A tab that is already open gets it when it resumes or compacts.
+New tabs get the rule as they start. A tab that is already open gets it when it resumes or compacts. Open the panel with Ctrl+K (Cmd+K on macOS) and "Open Pending".
 
 ## Remove
 
@@ -59,86 +45,90 @@ paseo plugin remove paseo-tabs
 /plugin marketplace remove paseo-tabs
 ```
 
-Existing `TABS.md` files stay where they are. Delete them, and the `TABS.md` line in each repository's `.git/info/exclude`, if you don't want them.
+The store stays in `~/.local/state/paseo-tabs/` (or `$XDG_STATE_HOME/paseo-tabs/`). Delete that folder if you don't want it.
 
-## What it does
+## How tabs use it
 
-### Keeping TABS.md in step
+Every Claude tab gets five tools:
 
-The Paseo plugin reads Paseo's agent and workspace records, and checks each `TABS.md`, every 2 seconds. It updates a `TABS.md` whenever its tabs change, an edit changes what is open, an item turns overdue, or a finished item has been ticked for a day.
+| Tool | What it does |
+|---|---|
+| `pending_add` | Adds an item. `kind` is `waiting` (something you do or decide) or `next` (the tab's own next step). `what`, `action`, `minutes` and `why` are all required. |
+| `pending_update` | Changes fields of one of the tab's items, by letter. |
+| `pending_done` | Closes one of the tab's items as `done` or `dropped`, with an optional note. |
+| `pending_list` | Lists the tab's open items. |
+| `pending_find` | Finds other tabs to hand work to, live ones and ones whose workspace was archived in the last 30 days, by words from the workspace or tab name or an ID prefix. |
 
-<img src="assets/tabs-md.png" width="480" alt="A TABS.md with five tab sections: red, orange, blue and green dots on the open tabs, and a closed tab at the bottom">
+The rule each tab gets ([claude/rule-pending.md](claude/rule-pending.md)) asks it to say every ask in full in the chat and add it to the panel at once, close items the moment there is evidence they are done, and never add an item it can check itself. Two hooks back this up: before each of your messages the tab sees its open items and is asked to reconcile them, and a tab that did real work in a turn without touching its list is stopped once and asked to reconcile before it finishes.
 
-- It creates `TABS.md` only at the top level of a git repository that has an open Claude tab. Whenever it writes the file, it makes sure `TABS.md` is in that repository's `.git/info/exclude`, so the file is never committed, even when a tab created it by hand. In a worktree, the line goes in the main repository's exclude file.
-- Tabs are numbered in the order they were opened, matching the tab bar. Headings follow renames.
-- Each open tab's heading starts with a dot. 🔴 means an item has waited on you, unchanged, for longer than your limit. 🟠 means something in its section waits on you, 🔵 that only its next steps are open, and ✅ that nothing is open. A new tab and closed tabs get no dot.
-- To know how long an item has waited, the plugin notes when each item under "Waiting on you" last changed. It keeps this in its own file under `$XDG_STATE_HOME/paseo-tabs/` (`~/.local/state/paseo-tabs/` when that variable is unset), one file for each Paseo home. `TABS.md` itself never gets dates. Rewording an item restarts its clock, and ticking it off or removing it forgets it. Items that were already open when the plugin was installed start counting from then.
-- The plugin shortens long names, usually Paseo's copy of a first message, for display. Stray quotes and openers go, the first clause stays, and an ellipsis marks a cut. The names in Paseo stay as they are.
-- When a folder has tabs from more than one Paseo workspace, each workspace's tabs sit under a `# <workspace name> · <short id>` line, numbered on their own. The groups follow Paseo's sidebar: newest first, by when each workspace was made, which is Paseo's default, or by the latest message to any of their tabs if you choose that in the settings. Pinned workspaces come first and archived ones last, with tabs that belong to no workspace just before the archived ones.
-- A closed tab's section moves to the bottom of its workspace, marked ` · closed`. It stays while anything in it is open. Once nothing in it is open and the tab has been closed for 24 hours, it moves to `TABS-DONE.md` in the same folder, which holds the sections under their original headings, newest first, under the line `# Finished tabs (moved from TABS.md)`. The file is created the first time something moves, and git ignores it like `TABS.md`. Any unticked box counts as open, at any indent, under any list. A list line starting with "- Nothing" doesn't. When Paseo's records can't be read, such as during a restart of Paseo, every tab counts as open and nothing moves. A tab that becomes active again in Paseo gets its section back in `TABS.md`, with its letters and items. The plugin writes `TABS-DONE.md` before `TABS.md` when moving out and `TABS.md` first when moving back, so a crash can duplicate a section but never lose one, and it checks the short ID so a section is never added twice. A section moves as a whole: a `## ` line that is not a tab heading, and anything in a code block, belongs to the tab above it, and an open box anywhere in it keeps the whole section in `TABS.md`. If a tab that came back has already written a new section in `TABS.md`, the old copy in `TABS-DONE.md` stays as history.
-- A finished item, a lettered item with a ticked box, leaves `TABS.md` a day after the plugin first sees it ticked. The plugin counts the day in the same file as the item ages, so a restart doesn't reset it, but unticking the item does. The highest letter in each section always stays while the section is in `TABS.md`, so a tab that follows the rule never gives a new item a letter that was used before. A section moved to `TABS-DONE.md` keeps all its items. The plugin also records each tab's highest letter in its own state file, but nothing the agents see depends on it. Only a whole one-line item that starts `- <letter>) [x]` goes, with nothing indented under it, and the bold labels stay when their lists empty. You can turn this off in the settings.
-- It keeps sections it doesn't recognise, and any text above the first heading, as written.
-- It changes only headings, group lines, the order of sections and, a day after they are ticked, finished items. The rest of the text under each heading belongs to that tab. Before writing, it re-reads the file, so an edit made a moment earlier, by an agent or by you, is not lost.
+Messages from the panel:
 
-### The Tabs panel
+- `Picked from the panel: <what>. Action: ... About N min. Why: ... (item x)` means you chose that item. The tab restates it and starts on it.
+- `Done from the panel: <what>. The user says this is finished. (item x)` means you did it. The tab checks what it cheaply can, closes the item, and offers the remaining ones.
 
-Open it with Ctrl+K (⌘K on macOS) and "Open Tabs". It lists the workspace's tabs in tab-bar order, each with its dot, its "About this tab" line, and how many items are waiting on you, overdue and next. Tabs waiting on you are bold, and each row's edge takes its dot's colour. Tapping a tab opens it. Below the open tabs, dimmed, it lists closed tabs that still have a section.
+A pick or Mark done is sent at once. A running tab gets it steered into its turn, and a tab stopped on a question is interrupted, since the pick supersedes the question.
 
-The panel draws its dots, so they show in colour on any machine. The dots in `TABS.md` are emoji, which need a colour emoji font.
+**Handing work to another tab.** A tab finds the other tab with `pending_find`, then messages it with Paseo's `send_agent_prompt`. When the work waits on you, it adds a `waiting` item for that tab with the command-line helper, `node <plugin folder>/tools/pending.ts add --agent <id> --json '{...}'`, so the item shows in that tab's workspace.
 
-Paseo's own `paseo://` tab links do nothing when clicked inside Paseo, which is why the panel exists.
+The rule also asks each tab to name itself for its task, and the first tab in a workspace to name the workspace for its topic, when Paseo's tools are available inside agents (`daemon.mcp.injectIntoAgents`).
 
-### The sidebar line
+To add your own lines to the rule, put them in `~/.local/state/paseo-tabs/rule-extra.md`. They are appended to the rule each tab gets.
 
-Each workspace row in Paseo's sidebar gets a line of its own from the plugin, under the workspace's name and after Paseo's own items there, such as the host. It shows the workspace's most urgent open tab: its dot, its name, and the first item waiting on you, cut to fit the row.
-
-```
-🟠 Fix the login redirect · Try a reset on staging and say whether…
-```
-
-- The most urgent tab shows: red, then orange, blue, a green tick, and last a new tab with no dot yet. On a tie the newest one shows. Closed tabs never do.
-- "+1" after the name means one more tab in that workspace is open.
-- The item is shown without its letter, its box, its Markdown, and a time at the end such as "(about 5 min)".
-- A workspace gets no line when its folder has no `TABS.md`, or when it has no open tab.
-- The line follows `TABS.md` within a few seconds.
-- To turn it off on a device, untick "Tab status" in the sidebar's Display preferences, under Show. When the line is short of room, unticking Host there gives it the whole line. Diff stats sits beside the workspace's name, so unticking it gives the name more room, not this line.
-- It needs Paseo 0.16.0 or later in the app. Older apps keep the Tabs panel and show no line.
-
-### Settings
+## Settings
 
 Find these in Paseo under Settings, Plugins, Tabs.
 
 | Setting | What it changes | Default |
 |---|---|---|
-| Status dots | The dots in `TABS.md` and the panel | On |
-| Shorten long names | The shortened display names | On |
-| Longest name | How many characters a shortened name keeps, from 25 to 80 | 40 |
-| Overdue after | How long an item may wait on you, unchanged, before its tab turns red: 3 days, 1 week, 2 weeks, 30 days, or never | 1 week |
-| Workspace order | How the workspace groups run in a `TABS.md` that holds more than one workspace: newest first, or latest message first. Pick the order your Paseo sidebar uses | Newest first |
-| Remove finished items | Whether finished items leave `TABS.md` a day after they are ticked | On |
-| Palette | The panel's colours: Standard, Catppuccin, Gruvbox or Nord, each in a dark or light version to match your Paseo theme | Standard |
+| Mode | Pending panel, or the 1.x TABS.md file (legacy) | Pending panel for a new install; TABS.md file for an install upgraded from 1.x, until you switch or migrate |
+| Archive finished workspaces | When every item in a workspace is closed, the tab ends its reply with "Nothing further waiting on you." and the workspace is archived about 10 minutes later. A new item waiting on you brings it back | Off (on for installs migrated from 1.x with the cut-over marker, until you turn it off) |
+| Status dots | The coloured dot on each workspace's sidebar line | On |
+| Shorten long names | Shortened display names; the names in Paseo stay as they are | On |
+| Longest name | How many characters a shortened name keeps, 25 to 80 | 40 |
+| Overdue after | How long an item may wait on you, unchanged, before its tab's dot turns red | 1 week |
+| Palette | The dot colours: Standard, Catppuccin, Gruvbox or Nord | Standard |
+| Workspace order, Remove finished items | TABS.md file mode only | Newest first, On |
 
-<img src="assets/palettes.png" width="700" alt="The four palettes, Standard, Catppuccin, Gruvbox and Nord, each with rows for overdue, waiting on you, next steps and nothing open">
+**Auto-archive in detail.** With it on, a workspace is archived only when every pending item in it is closed and nothing has moved for 10 minutes: no message, no item change, no typing in a message box in the last 3 minutes and no voice dictation in the last 5. Pinned workspaces, and ones a schedule or heartbeat targets, are never archived. The tab's Stop hook asks for the closing line and schedules the archive (with `systemd-run --user` where it exists, else a background timer); a sweep in the daemon every 5 minutes covers tabs whose hook never loaded. A new `waiting` item for a tab whose workspace was archived restores the workspace; a plain message runs the tab but leaves the workspace archived. With it off, none of this runs and the rule just asks the tab to end with "Nothing further waiting on you."
 
-Every `TABS.md` picks up a changed setting at once.
+## Migrating from 1.x (TABS.md)
 
-### The rule each tab gets
+1.x kept each tab's items in a `TABS.md` file at the top of the repository. 2.0 keeps them in a store, one JSON file per workspace under `~/.local/state/paseo-tabs/pending/`. An upgraded 1.x install keeps working as before: it stays in TABS.md mode until you switch.
 
-The Claude Code plugin's SessionStart hook runs only inside Paseo, in a folder that is the top level of a git repository. It gives the tab [the rule](claude/rule.md) with its ID and the path to `TABS.md` filled in. Outside Paseo it does nothing.
+To move your open items into the panel:
 
-The rule also asks each tab to name itself for its task once that is clear, and the first tab in a workspace to name the workspace for its topic when the workspace's name reads like a message. Names stay stable and carry no status, since the dot shows it. Names you set are kept. This needs Paseo's own tools inside agents, which the daemon setting `daemon.mcp.injectIntoAgents` turns on.
+1. Import each `TABS.md` into the store. Run it first without `--write` to see what it would import, one line per workspace:
 
-### Closed tabs
+   ```
+   node <plugin folder>/tools/pending-import.ts /path/to/repo/TABS.md
+   node <plugin folder>/tools/pending-import.ts /path/to/repo/TABS.md --write
+   ```
 
-Closing a tab gives it no turn, so a tab can do nothing once you close it. The rule asks each tab to do any work it would have left for then, and to tick or hand over whatever is left, before it says the tab can be closed.
+   Items keep their letters. Running it twice adds nothing.
+2. Switch Mode to Pending panel in the settings, or create the cut-over marker. The marker keeps the Pending panel on for good and turns auto-archive on unless you turn it off:
 
-You can bring a closed tab back by sending it a message, and its section and letters stay valid. Claude Code deletes a conversation's transcript after 30 days by default, after which the tab comes back without its history. To keep transcripts longer, set `cleanupPeriodDays` in `~/.claude/settings.json`, for example `"cleanupPeriodDays": 365`.
+   ```
+   touch ~/.local/state/paseo-tabs/pending/cutover
+   ```
 
-If a tab can't come back, a new tab can take over its section. It puts its own ID in the heading, keeps the letters and items, and notes `Continues <old id>`.
+With the marker, `TABS.md` is kept as a read-only view of the store for 7 days, for anything that still reads it, and then left alone. The 1.x code is kept on the `v1` branch.
 
-## Opening TABS.md beside a chat
+## Requirements and limits
 
-In Paseo, press Ctrl+K, choose Files, right-click `TABS.md` and choose "Open to the side". The pane refreshes as the file changes.
+- Paseo 0.17.0 or later, daemon and app. The panel and the agent tools need it.
+- Claude Code tabs get the tools and the rule. Tabs from other providers get no tools; their items never show.
+- The plugin cannot open the panel beside a chat or split the view for you. Open it from the Command Center.
+- Typing is detected from Paseo's message boxes. On a phone, it is seen only while a workspace's row is on screen in the sidebar, or while the message box is open.
+- Voice dictation is detected from the daemon's log, for all workspaces at once, so dictating anywhere holds every auto-archive back for 5 minutes.
+- The store is local to the machine that runs the daemon. The plugin sends nothing over the network.
+- Tested on Linux.
+
+## What it reads and writes
+
+- Paseo's agent and workspace records in the daemon's home folder (`~/.paseo`, or `$PASEO_HOME`), and the plugin's saved settings there.
+- Its own state under `~/.local/state/paseo-tabs/` (or `$XDG_STATE_HOME/paseo-tabs/`): the store in `pending/`, typing activity in `activity.json`, archived tabs (kept 30 days) in `archived-tabs.json`, and per-tab markers in `auto-archive/`.
+- In TABS.md mode only, `TABS.md` and `TABS-DONE.md` at the top of each git repository with an open Claude tab, kept out of git through `.git/info/exclude`, and an item clock in the state folder.
+- With auto-archive on, it runs `paseo workspace archive` and `paseo agent inspect`, and restores workspaces through the client library that ships with Paseo's CLI. It finds the CLI on `PATH`, else in `$(npm root -g)/@getpaseo/cli`; set `PASEO_CLI_ROOT` to that folder if it lives elsewhere.
 
 ## Development
 
@@ -148,9 +138,7 @@ npm test
 npm run typecheck
 ```
 
-Tests use Node's built-in runner and need Node 22.18 or later. `node tools/sync-once.ts --dry-run` prints what one sync pass would change in your real `TABS.md` files, and writes nothing. It uses the default settings, not the ones saved in Paseo.
-
-The pictures are drawn from the HTML in `assets/src/`, with made-up tabs, and `assets/src/render.sh` redraws them.
+Tests use Node's built-in runner and need Node 22.18 or later. Every test works in temporary folders. `node tools/pending.ts sweep --dry-run` prints what the daemon's sweep would archive, and archives nothing. The pictures are drawn from the HTML in `assets/src/` with made-up tabs; `assets/src/render.sh` redraws them.
 
 ## License
 
