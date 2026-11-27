@@ -7,6 +7,6 @@
     "assets/palettes.png"
   ],
   "requirements": {
-    "paseo": ">=0.17.5"
+    "paseo": ">=0.17.0"
   }
 }
