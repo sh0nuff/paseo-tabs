@@ -14,10 +14,10 @@ export function PendingPanel({ theme, layout, workspaceId, navigation }: PluginW
   const checkEnabled = useRpc(pendingEnabled);
   const search = useRpc(pendingSearch);
   const queryClient = useQueryClient();
-  // "waiting": send queued for the tab. "sent": the message went out.
-  const [queued, setQueued] = useState<Record<string, "waiting" | "sent" | undefined>>({});
+  // "sending": the send call is in flight. "sent": the message went out (shown for a few seconds).
+  const [queued, setQueued] = useState<Record<string, "sending" | "sent" | undefined>>({});
   // "Mark done" sends, tracked apart from the radio pick so each guards only itself.
-  const [doneQueued, setDoneQueued] = useState<Record<string, "waiting" | "sent" | undefined>>({});
+  const [doneQueued, setDoneQueued] = useState<Record<string, "sending" | "sent" | undefined>>({});
   const [failure, setFailureState] = useState<{ text: string; key: string | null } | null>(null);
   const setFailure = (error: unknown, key: string | null) => {
     const raw = error instanceof Error ? error.message : String(error);
@@ -109,7 +109,7 @@ export function PendingPanel({ theme, layout, workspaceId, navigation }: PluginW
     try {
       // The RPC marks the item picked and returns the message; sending comes after.
       const { message } = await pick({ workspaceId, agentId: card.agentId, letter: card.letter, ...(done ? { done: true } : {}) });
-      setState((q) => ({ ...q, [key]: "waiting" }));
+      setState((q) => ({ ...q, [key]: "sending" }));
       void queryClient.invalidateQueries({ queryKey: ["paseo-pending", workspaceId] });
       const ref = paseo.agents.ref(card.agentId);
       // A handle's properties may be a snapshot, so read the status from current() after a refresh.
@@ -119,34 +119,32 @@ export function PendingPanel({ theme, layout, workspaceId, navigation }: PluginW
           await ref.refresh();
           adapter.status = ref.current()?.status ?? null;
         },
-        send: (body: string) => ref.send(body),
+        send: (body: string, options?: { activeTurnBehavior: "steer" }) => ref.send(body, options),
       };
-      // Same key for both paths: a done send replaces a pick's send still waiting for this workspace.
-      const sender = sendPicked(adapter, message, () => unpick({ workspaceId, agentId: card.agentId, letter: card.letter }), {
-        key: workspaceId,
-      });
-      sender.done
-        .then(() => setState((q) => ({ ...q, [key]: q[key] === "waiting" ? "sent" : q[key] })))
-        .catch((error: unknown) => {
-          setFailure(error, key);
-          setState((q) => ({ ...q, [key]: undefined }));
-          void queryClient.invalidateQueries({ queryKey: ["paseo-pending", workspaceId] });
-        });
+      try {
+        await sendPicked(adapter, message, () => unpick({ workspaceId, agentId: card.agentId, letter: card.letter }));
+        setState((q) => ({ ...q, [key]: "sent" }));
+        setTimeout(() => setState((q) => ({ ...q, [key]: q[key] === "sent" ? undefined : q[key] })), 4000);
+      } catch (error) {
+        setFailure(error, key);
+        setState((q) => ({ ...q, [key]: undefined }));
+        void queryClient.invalidateQueries({ queryKey: ["paseo-pending", workspaceId] });
+      }
     } catch (error) {
       setFailure(error, key);
     }
   };
 
-  // Only a send already queued from this panel stops a second press. A card picked earlier
+  // Only a send still in flight from this panel stops a second press. A card picked earlier
   // is left to the server, which refuses a pick that still stands.
   const choose = async (card: PendingCard) => {
-    if (queued[cardKey(card)] === "waiting") return;
+    if (queued[cardKey(card)] === "sending") return;
     await submit(card, false);
   };
 
-  // Goes through at once, even while the first pick's message waits; that message is dropped.
+  // Goes through at once, even while a pick's send is in flight.
   const markDone = async (card: PendingCard) => {
-    if (doneQueued[cardKey(card)] === "waiting") return;
+    if (doneQueued[cardKey(card)] === "sending") return;
     await submit(card, true);
   };
 
@@ -205,8 +203,9 @@ export function PendingPanel({ theme, layout, workspaceId, navigation }: PluginW
       {failure ? <Text style={styles.error}>{failure.text}</Text> : null}
       {items.length === 0 ? <Text style={styles.message}>No pending items</Text> : null}
       {items.map((card) => {
-        const waiting = queued[cardKey(card)] === "waiting";
-        const doneWaiting = doneQueued[cardKey(card)] === "waiting";
+        const waiting = queued[cardKey(card)] === "sending";
+        const sent = queued[cardKey(card)] === "sent";
+        const doneSent = doneQueued[cardKey(card)] === "sent";
         return (
           <View key={cardKey(card)}>
             <Pressable
@@ -223,12 +222,12 @@ export function PendingPanel({ theme, layout, workspaceId, navigation }: PluginW
                 <Text style={styles.line}>{waitingLabel(card.created, new Date())}</Text>
                 {card.why ? <Text style={styles.line}>{`Why: ${card.why}`}</Text> : null}
                 {card.picked && !waiting ? <Text style={styles.state}>In progress</Text> : null}
-                {waiting ? <Text style={styles.state}>Sent when the tab finishes</Text> : null}
+                {sent ? <Text style={styles.state}>Sent</Text> : null}
               </View>
             </Pressable>
             <Pressable accessibilityRole="button" accessibilityLabel="Mark done" style={styles.hit} onPress={() => void markDone(card)}>
               <Text style={styles.line}>Mark done</Text>
-              {doneWaiting ? <Text style={styles.state}>Done sent when the tab finishes</Text> : null}
+              {doneSent ? <Text style={styles.state}>Sent</Text> : null}
             </Pressable>
           </View>
         );
