@@ -1,4 +1,5 @@
 import type { PluginServerContext } from "@getpaseo/plugin/server";
+import { pendingActivityHandler } from "./server/activity.ts";
 import { ItemClock, clockPath } from "./server/item-clock.ts";
 import { paseoHome } from "./server/paseo-state.ts";
 import { pendingEnabledHandler, storeMode, pendingListHandler, pendingPickHandler, pendingSearchHandler, pendingUnpickHandler } from "./server/pending-rpc.ts";
@@ -11,6 +12,7 @@ import { storeLines, storeTabRows } from "./server/pending-lines.ts";
 import { type Watcher, startWatcher } from "./server/watcher.ts";
 import { displaySettings } from "./shared/settings.ts";
 import { pendingEnabled, pendingList, pendingPick, pendingSearch, pendingUnpick } from "./shared/pending-rpc.ts";
+import { pendingActivity } from "./shared/activity-rpc.ts";
 import { tabsLines, tabsList } from "./shared/tabs-rpc.ts";
 
 export default function contribute(server: PluginServerContext) {
@@ -66,6 +68,7 @@ export default function contribute(server: PluginServerContext) {
   server.handle(pendingUnpick, ({ workspaceId, agentId, letter }) => pendingUnpickHandler(store, workspaceId, agentId, letter));
   server.handle(pendingEnabled, () => pendingEnabledHandler(store));
   server.handle(pendingSearch, ({ query }) => pendingSearchHandler(store, home, query));
+  server.handle(pendingActivity, ({ agentId, draftLength }) => pendingActivityHandler(store, agentId, draftLength, new Date()));
   return () => {
     stopped = true;
     unsubscribe();

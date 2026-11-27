@@ -3,7 +3,7 @@
 //
 //   node tools/pending.ts <add|update|done|drop|reopen|list> --agent <id> [--workspace <id>]
 //        [--letter x] [--json '{...}'] [--note '...'] [--cwd <dir>] [--dir <store dir>] [--home <Paseo home>]
-//   node tools/pending.ts auto-archive --agent <id> [--scheduled <iso time>]
+//   node tools/pending.ts auto-archive --agent <id> [--scheduled <iso time>] [--attempt N]
 //                                                       archive the agent's workspace if still nothing is open
 //   node tools/pending.ts find <words...>                tabs to hand work to, one JSON line each
 //
@@ -14,6 +14,7 @@
 
 import { parseArgs } from "node:util";
 import { registryPath } from "../server/archived-tabs.ts";
+import { scheduleAutoArchive } from "../server/schedule-archive.ts";
 import { autoArchive, findTabs, isArchived } from "../server/auto-archive.ts";
 import { loadState, paseoHome } from "../server/paseo-state.ts";
 import { addItem, finishItem, listOpen, pendingDir, reopenItem, updateItem } from "../server/pending-store.ts";
@@ -21,7 +22,7 @@ import { paseoRunner, runRestore } from "../server/workspace-control.ts";
 
 const USAGE =
   "usage: pending.ts <add|update|done|drop|reopen|list> --agent <id> [--workspace <id>] [--letter x] [--json '{...}'] [--note '...'] [--cwd <dir>] [--home <Paseo home>]\n" +
-  "       pending.ts auto-archive --agent <id> [--scheduled <iso time>]\n" +
+  "       pending.ts auto-archive --agent <id> [--scheduled <iso time>] [--attempt N]\n" +
   "       pending.ts find <words...>";
 const COMMANDS = ["add", "update", "done", "drop", "reopen", "list", "auto-archive", "find"];
 
@@ -38,6 +39,7 @@ async function main(): Promise<void> {
       dir: { type: "string" },
       home: { type: "string" },
       scheduled: { type: "string" },
+      attempt: { type: "string" },
     },
   });
   const [command, ...words] = positionals;
@@ -58,7 +60,11 @@ async function main(): Promise<void> {
   if (command === "auto-archive") {
     const scheduledAt = values.scheduled ? new Date(values.scheduled) : undefined;
     if (scheduledAt && Number.isNaN(scheduledAt.getTime())) throw new Error(`--scheduled is not a time: ${values.scheduled}`);
-    const line = await autoArchive({ agentId: need("agent"), dir, home, registry: registryPath(process.env), runner: paseoRunner(process.env), now, scheduledAt });
+    const attempt = values.attempt ? Number(values.attempt) : 0;
+    if (!Number.isInteger(attempt) || attempt < 0) throw new Error(`--attempt is not a count: ${values.attempt}`);
+    const agentId = need("agent");
+    const postpone = (next: number) => scheduleAutoArchive(process.argv[1], agentId, scheduledAt ?? now, next);
+    const line = await autoArchive({ agentId, dir, home, registry: registryPath(process.env), runner: paseoRunner(process.env), now, scheduledAt, attempt, postpone });
     process.stderr.write(`${line}\n`);
     return;
   }

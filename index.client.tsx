@@ -1,5 +1,6 @@
 import type { PluginClientContext } from "@getpaseo/plugin/client";
 import { PendingPanel } from "./client/pending-panel.tsx";
+import { ComposerDraftActivity } from "./client/use-draft-activity.tsx";
 import { SettingsScreen } from "./client/settings-screen.tsx";
 import { TabsLine } from "./client/tabs-line.tsx";
 import { TabsPanel } from "./client/tabs-panel.tsx";
@@ -43,6 +44,10 @@ export default function contribute(client: PluginClientContext) {
     icon: "ListChecks",
     Component: SettingsScreen,
   });
+  // Reports typing in message boxes so a tab is not auto-archived under the user. Renders nothing.
+  if (typeof client.addComposerItem === "function") {
+    client.addComposerItem({ id: "draft-activity", Component: ComposerDraftActivity });
+  }
   // Paseo apps before 0.16 have no workspace row slot. They keep the panel.
   if (typeof client.addWorkspaceRowBadgeItem === "function") {
     client.addWorkspaceRowBadgeItem({

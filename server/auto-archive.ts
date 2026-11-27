@@ -3,6 +3,7 @@
 
 import { type PaseoState, loadState } from "./paseo-state.ts";
 import { type ArchivedTab, readRegistry, recordArchived, removeArchived } from "./archived-tabs.ts";
+import { readActivity, recentDictation } from "./activity.ts";
 import { readPending } from "./pending-store.ts";
 import { type ControlRunner, archiveWorkspace } from "./workspace-control.ts";
 
@@ -15,7 +16,16 @@ export type AutoArchiveOptions = {
   now: Date;
   /** When the archive was scheduled: a user message to any tab after this means someone is there. */
   scheduledAt?: Date;
+  /** How many times this archive was postponed already (0 for the first run). */
+  attempt?: number;
+  /** Schedules the same archive again 10 minutes later, as attempt N. Absent: a postponement is only reported. */
+  postpone?: (attempt: number) => void;
 };
+
+export const MAX_POSTPONEMENTS = 6;
+const ACTIVITY_MS = 10 * 60_000;
+const DRAFT_MS = 3 * 60_000;
+const DICTATION_MS = 5 * 60_000;
 
 /** Statuses of a tab that is not working: "closed" is an idle tab Paseo has unloaded. */
 const RESTING = new Set(["idle", "closed"]);
@@ -42,6 +52,13 @@ export async function autoArchive(o: AutoArchiveOptions): Promise<string> {
     const since = o.scheduledAt.getTime();
     const busy = tabs.find((a) => a.lastUserMessageAt && Date.parse(a.lastUserMessageAt) > since);
     if (busy) return `auto-archive ${wsId}: tab ${busy.id} got a message after the archive was scheduled, not archived`;
+  }
+  const why = userBusy(o, tabs.map((a) => a.id));
+  if (why) {
+    const attempt = o.attempt ?? 0;
+    if (attempt >= MAX_POSTPONEMENTS) return `auto-archive ${wsId}: ${why}; postponed ${MAX_POSTPONEMENTS} times already, giving up, not archived`;
+    o.postpone?.(attempt + 1);
+    return `auto-archive ${wsId}: ${why}; postponed 10 minutes (${attempt + 1} of ${MAX_POSTPONEMENTS})`;
   }
   for (const tab of tabs) {
     let status: string | null;
@@ -73,6 +90,21 @@ export async function autoArchive(o: AutoArchiveOptions): Promise<string> {
     return `auto-archive ${wsId}: archive failed${archivedAnyway ? " but Paseo shows it archived, entries kept" : ""}: ${why}`;
   }
   return `auto-archive ${wsId}: archived ("${ws.title ?? ""}", tab ${o.agentId})`;
+}
+
+/** Why the user looks present in this workspace right now (typing, an unsent draft, dictation), or null. */
+function userBusy(o: AutoArchiveOptions, agentIds: string[]): string | null {
+  const activity = readActivity(o.dir);
+  const now = o.now.getTime();
+  for (const id of agentIds) {
+    const e = activity[id];
+    const at = e ? Date.parse(e.at) : NaN;
+    if (!Number.isFinite(at)) continue;
+    if (e.draftLength > 0 && now - at < DRAFT_MS) return `tab ${id} has unsent text in its message box`;
+    if (now - at < ACTIVITY_MS) return `tab ${id} had activity in its message box in the last 10 minutes`;
+  }
+  if (recentDictation(o.home, o.now, DICTATION_MS)) return "voice dictation in the last 5 minutes";
+  return null;
 }
 
 export type FoundTab = {
