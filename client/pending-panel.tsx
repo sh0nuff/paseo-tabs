@@ -16,7 +16,8 @@ export function PendingPanel({ theme, layout, workspaceId, navigation }: PluginW
   const queryClient = useQueryClient();
   // "waiting": send queued for the tab. "sent": the message went out.
   const [queued, setQueued] = useState<Record<string, "waiting" | "sent" | undefined>>({});
-  const [doneTicked, setDoneTicked] = useState<Record<string, boolean | undefined>>({});
+  // "Mark done" sends, tracked apart from the radio pick so each guards only itself.
+  const [doneQueued, setDoneQueued] = useState<Record<string, "waiting" | "sent" | undefined>>({});
   const [failure, setFailureState] = useState<{ text: string; key: string | null } | null>(null);
   const setFailure = (error: unknown, key: string | null) => {
     const raw = error instanceof Error ? error.message : String(error);
@@ -101,15 +102,14 @@ export function PendingPanel({ theme, layout, workspaceId, navigation }: PluginW
     [theme, layout.compact],
   );
 
-  const choose = async (card: PendingCard) => {
-    // Only a send already queued from this panel stops a second press. A card picked earlier
-    // is left to the server, which refuses a pick that still stands.
-    if (queued[cardKey(card)] === "waiting") return;
+  const submit = async (card: PendingCard, done: boolean) => {
+    const key = cardKey(card);
+    const setState = done ? setDoneQueued : setQueued;
     setFailureState(null);
     try {
       // The RPC marks the item picked and returns the message; sending comes after.
-      const { message } = await pick({ workspaceId, agentId: card.agentId, letter: card.letter, ...(doneTicked[cardKey(card)] ? { done: true } : {}) });
-      setQueued((q) => ({ ...q, [cardKey(card)]: "waiting" }));
+      const { message } = await pick({ workspaceId, agentId: card.agentId, letter: card.letter, ...(done ? { done: true } : {}) });
+      setState((q) => ({ ...q, [key]: "waiting" }));
       void queryClient.invalidateQueries({ queryKey: ["paseo-pending", workspaceId] });
       const ref = paseo.agents.ref(card.agentId);
       // A handle's properties may be a snapshot, so read the status from current() after a refresh.
@@ -121,19 +121,33 @@ export function PendingPanel({ theme, layout, workspaceId, navigation }: PluginW
         },
         send: (body: string) => ref.send(body),
       };
+      // Same key for both paths: a done send replaces a pick's send still waiting for this workspace.
       const sender = sendPicked(adapter, message, () => unpick({ workspaceId, agentId: card.agentId, letter: card.letter }), {
         key: workspaceId,
       });
       sender.done
-        .then(() => setQueued((q) => ({ ...q, [cardKey(card)]: q[cardKey(card)] === "waiting" ? "sent" : q[cardKey(card)] })))
+        .then(() => setState((q) => ({ ...q, [key]: q[key] === "waiting" ? "sent" : q[key] })))
         .catch((error: unknown) => {
-          setFailure(error, cardKey(card));
-          setQueued((q) => ({ ...q, [cardKey(card)]: undefined }));
+          setFailure(error, key);
+          setState((q) => ({ ...q, [key]: undefined }));
           void queryClient.invalidateQueries({ queryKey: ["paseo-pending", workspaceId] });
         });
     } catch (error) {
-      setFailure(error, cardKey(card));
+      setFailure(error, key);
     }
+  };
+
+  // Only a send already queued from this panel stops a second press. A card picked earlier
+  // is left to the server, which refuses a pick that still stands.
+  const choose = async (card: PendingCard) => {
+    if (queued[cardKey(card)] === "waiting") return;
+    await submit(card, false);
+  };
+
+  // Goes through at once, even while the first pick's message waits; that message is dropped.
+  const markDone = async (card: PendingCard) => {
+    if (doneQueued[cardKey(card)] === "waiting") return;
+    await submit(card, true);
   };
 
   const searchBox = (
@@ -192,33 +206,31 @@ export function PendingPanel({ theme, layout, workspaceId, navigation }: PluginW
       {items.length === 0 ? <Text style={styles.message}>No pending items</Text> : null}
       {items.map((card) => {
         const waiting = queued[cardKey(card)] === "waiting";
+        const doneWaiting = doneQueued[cardKey(card)] === "waiting";
         return (
-          <Pressable
-            key={cardKey(card)}
-            accessibilityRole="radio"
-            accessibilityState={{ selected: card.picked || waiting }}
-            onPress={() => void choose(card)}
-            style={styles.card}
-          >
-            <View style={[styles.radio, card.picked || waiting ? styles.radioOn : null]} />
-            <View style={styles.body}>
-              <Pressable
-                accessibilityRole="checkbox"
-                accessibilityLabel="Done already"
-                accessibilityState={{ checked: doneTicked[cardKey(card)] === true }}
-                onPress={() => setDoneTicked((d) => ({ ...d, [cardKey(card)]: !d[cardKey(card)] }))}
-              >
-                <Text style={styles.line}>{`${doneTicked[cardKey(card)] ? "[x]" : "[ ]"} Done already`}</Text>
-              </Pressable>
-              <Text style={styles.what}>{card.what}</Text>
-              <Text style={styles.line}>{`Action: ${card.action || "ask the tab"}`}</Text>
-              <Text style={styles.line}>{`About ${card.minutes} min`}</Text>
-              <Text style={styles.line}>{waitingLabel(card.created, new Date())}</Text>
-              {card.why ? <Text style={styles.line}>{`Why: ${card.why}`}</Text> : null}
-              {card.picked && !waiting ? <Text style={styles.state}>In progress</Text> : null}
-              {waiting ? <Text style={styles.state}>Sent when the tab finishes</Text> : null}
-            </View>
-          </Pressable>
+          <View key={cardKey(card)}>
+            <Pressable
+              accessibilityRole="radio"
+              accessibilityState={{ selected: card.picked || waiting }}
+              onPress={() => void choose(card)}
+              style={styles.card}
+            >
+              <View style={[styles.radio, card.picked || waiting ? styles.radioOn : null]} />
+              <View style={styles.body}>
+                <Text style={styles.what}>{card.what}</Text>
+                <Text style={styles.line}>{`Action: ${card.action || "ask the tab"}`}</Text>
+                <Text style={styles.line}>{`About ${card.minutes} min`}</Text>
+                <Text style={styles.line}>{waitingLabel(card.created, new Date())}</Text>
+                {card.why ? <Text style={styles.line}>{`Why: ${card.why}`}</Text> : null}
+                {card.picked && !waiting ? <Text style={styles.state}>In progress</Text> : null}
+                {waiting ? <Text style={styles.state}>Sent when the tab finishes</Text> : null}
+              </View>
+            </Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel="Mark done" style={styles.hit} onPress={() => void markDone(card)}>
+              <Text style={styles.line}>Mark done</Text>
+              {doneWaiting ? <Text style={styles.state}>Done sent when the tab finishes</Text> : null}
+            </Pressable>
+          </View>
         );
       })}
       {searchBox}

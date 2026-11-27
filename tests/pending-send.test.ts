@@ -217,3 +217,15 @@ test("sendPicked leaves the pick alone when the send goes out", async () => {
   assert.equal(unpicked, 0);
   assert.deepEqual(agent.sent, ["hi"]);
 });
+
+test("sendPicked with the same key drops a waiting pick message for the done message", async () => {
+  const f = fakeTimers();
+  const busy = fakeAgent(["running"]);
+  const idle = fakeAgent(["idle"]);
+  const first = sendPicked(busy, "picked", async () => {}, { timers: f.timers, key: "sp5" });
+  await f.tick();
+  const second = sendPicked(idle, "done", async () => {}, { timers: f.timers, key: "sp5" });
+  await Promise.all([first.done, second.done]);
+  assert.deepEqual(busy.sent, []);
+  assert.deepEqual(idle.sent, ["done"]);
+});
