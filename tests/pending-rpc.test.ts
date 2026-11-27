@@ -93,3 +93,12 @@ test("list cards carry created", (t) => {
   const [card] = pendingListHandler(dir, "w").items;
   assert.equal(Date.parse(card.created), T0.getTime());
 });
+
+test("done on an already picked item returns the done message and keeps it picked; a plain re-pick is refused", (t) => {
+  const dir = tempDir(t);
+  addItem(dir, "w", "/c", "A", W, T0);
+  pendingPickHandler(dir, "w", "A", "a", T0);
+  assert.match(pendingPickHandler(dir, "w", "A", "a", T0, true).message, /^Done from the panel: .*\(item a\)$/);
+  assert.equal(pendingListHandler(dir, "w").items[0].picked, true);
+  assert.throws(() => pendingPickHandler(dir, "w", "A", "a", T0), /already picked/);
+});
