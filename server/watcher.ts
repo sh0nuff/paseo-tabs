@@ -14,6 +14,25 @@ import { cutoverMarker, storeMode } from "./pending-rpc.ts";
 import { renderView } from "./pending-view.ts";
 import { DEFAULT_DISPLAY, type DisplayOptions, TICKED_KEEP_MS, shortAgentId } from "./tabs-file.ts";
 
+/** Days after cut-over that TABS.md and TABS-DONE.md are still kept up as a view of the store. */
+export const VIEW_DAYS = 7;
+const VIEW_MS = VIEW_DAYS * 24 * 60 * 60 * 1000;
+
+/** When the cut-over marker makes the view stop, in ms, or null while there is no marker. */
+function viewRetiresAt(dir: string): number | null {
+  try {
+    return statSync(cutoverMarker(dir)).mtimeMs + VIEW_MS;
+  } catch {
+    return null;
+  }
+}
+
+/** True once the cut-over marker is VIEW_DAYS old: the watcher then leaves TABS.md and TABS-DONE.md alone. */
+export function viewRetired(dir: string, now: Date): boolean {
+  const at = viewRetiresAt(dir);
+  return at !== null && now.getTime() >= at;
+}
+
 export function syncAll(
   home: string,
   now: Date = new Date(),
@@ -30,6 +49,10 @@ export function syncAll(
       ? (short: string, body: string) => clock.expiredTicks(short, body, now, TICKED_KEEP_MS)
       : undefined;
   const results: Record<string, string> = {};
+  if (pendingDir !== undefined && viewRetired(pendingDir, now)) {
+    for (const cwd of new Set(state.agents.map((agent) => agent.cwd))) results[cwd] = "retired";
+    return results;
+  }
   // With the pending store on, TABS.md is a read-only view of it. A store that cannot be read leaves every file alone.
   const store = pendingDir !== undefined && storeMode(display, pendingDir);
   let files: ReturnType<typeof allFiles> | null = null;
@@ -143,7 +166,8 @@ export function startWatcher(
       const overdueAt = clock?.nextDue(options.overdueAfterDays, now.getTime()) ?? null;
       const expiresAt = options.removeFinished !== false ? clock?.nextTickExpiry(TICKED_KEEP_MS, now.getTime()) ?? null : null;
       const leavesAt = pendingDir !== undefined && storeMode(options, pendingDir) ? nextViewExpiry(pendingDir, now.getTime()) : null;
-      const times = [overdueAt, expiresAt, leavesAt].filter((time): time is number => time !== null);
+      const retiresAt = pendingDir !== undefined ? viewRetiresAt(pendingDir) : null;
+      const times = [overdueAt, expiresAt, leavesAt, retiresAt !== null && retiresAt > now.getTime() ? retiresAt : null].filter((time): time is number => time !== null);
       due = times.length === 0 ? null : Math.min(...times);
     } catch (error) {
       console.error("paseo-tabs: sync pass failed:", error);

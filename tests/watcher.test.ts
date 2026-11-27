@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { DEFAULT_DISPLAY, TICKED_KEEP_MS } from "../server/tabs-file.ts";
@@ -178,4 +178,31 @@ test("with pendingStore off the output for an existing file is unchanged by the 
     readFileSync(join(repo, "TABS.md"), "utf8"),
     "## 🟠 1. A title · aaaaaaa\n\n**Waiting on you**\n- a) [ ] answer (about 5 min)\n",
   );
+});
+
+function cutoverSetup(t: Parameters<typeof tempDir>[0], ageDays: number) {
+  const root = tempDir(t);
+  const home = makeHome(root);
+  const repo = gitInit(join(root, "repo"));
+  const pending = join(root, "pending");
+  mkdirSync(pending);
+  const marker = join(pending, "cutover");
+  writeFileSync(marker, "");
+  const then = new Date(NOW.getTime() - ageDays * 24 * 3600 * 1000);
+  utimesSync(marker, then, then);
+  writeAgent(home, { id: "aaaaaaa1", cwd: repo });
+  writeFileSync(join(repo, "TABS.md"), "SENTINEL, not a tabs file\n");
+  return { home, repo, pending };
+}
+
+test("a 6-day-old cut-over still writes the view", (t) => {
+  const { home, repo, pending } = cutoverSetup(t, 6);
+  syncAll(home, NOW, DEFAULT_DISPLAY, undefined, pending);
+  assert.notEqual(readFileSync(join(repo, "TABS.md"), "utf8"), "SENTINEL, not a tabs file\n");
+});
+
+test("an 8-day-old cut-over leaves TABS.md byte for byte as it was", (t) => {
+  const { home, repo, pending } = cutoverSetup(t, 8);
+  syncAll(home, NOW, DEFAULT_DISPLAY, undefined, pending);
+  assert.equal(readFileSync(join(repo, "TABS.md"), "utf8"), "SENTINEL, not a tabs file\n");
 });
