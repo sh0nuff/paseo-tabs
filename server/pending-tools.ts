@@ -4,8 +4,12 @@
 import { z } from "zod";
 import { defineAgentTool, type AgentToolContext, type AgentToolDefinition, type AgentToolResult } from "@getpaseo/plugin/server";
 import { existsSync } from "node:fs";
+import { registryPath } from "./archived-tabs.ts";
+import { findTabs, isArchived } from "./auto-archive.ts";
+import { loadState, paseoHome } from "./paseo-state.ts";
 import { cutoverMarker } from "./pending-rpc.ts";
 import { addItem, finishItem, listOpen, updateItem } from "./pending-store.ts";
+import { startRestore } from "./workspace-control.ts";
 
 const kind = z.enum(["waiting", "next"]);
 const minutes = z.number().int().positive();
@@ -24,7 +28,19 @@ function guarded(run: (workspaceId: string, context: AgentToolContext) => string
   };
 }
 
-export function pendingTools(dir: string): AgentToolDefinition[] {
+export type ToolOptions = {
+  /** Paseo's home folder, for the workspace records. */
+  home?: string;
+  /** archived-tabs.json. */
+  registry?: string;
+  /** Brings an archived workspace back; runs in the background by default. */
+  restore?: (workspaceId: string) => void;
+};
+
+export function pendingTools(dir: string, options: ToolOptions = {}): AgentToolDefinition[] {
+  const home = options.home ?? paseoHome(process.env);
+  const registry = options.registry ?? registryPath(process.env);
+  const restore = options.restore ?? ((id: string) => startRestore(id, process.env));
   return [
     defineAgentTool({
       name: "pending_add",
@@ -40,7 +56,14 @@ export function pendingTools(dir: string): AgentToolDefinition[] {
       execute: (input, context) =>
         guarded((ws, c) => {
           const item = addItem(dir, ws, c.agent.cwd, c.agent.id, input, new Date());
-          return `Added item ${item.letter}.`;
+          let archived = false;
+          try {
+            archived = isArchived(loadState(home), ws);
+          } catch {
+            // the item is stored either way
+          }
+          if (archived) restore(ws);
+          return archived ? `Added item ${item.letter}. This workspace was archived and is being restored.` : `Added item ${item.letter}.`;
         })(context),
     }),
     defineAgentTool({
@@ -82,6 +105,20 @@ export function pendingTools(dir: string): AgentToolDefinition[] {
             .map((i) => `${i.letter}) ${i.what} (about ${i.minutes} min)`);
           return lines.length ? lines.join("\n") : "No open items.";
         })(context),
+    }),
+    defineAgentTool({
+      name: "pending_find",
+      description:
+        "Find other tabs to hand work to: live ones, and ones whose workspace was archived when nothing was left waiting (kept 30 days). Matches every word against the workspace name and tab title, or as the start of an agent or workspace id. One JSON line per tab. Then message the tab with send_agent_prompt; an archived workspace comes back by itself.",
+      input: z.object({ query: z.string().describe("Words from the workspace name or tab title, or an id prefix; empty lists all") }),
+      execute: ({ query }) => {
+        try {
+          const rows = findTabs(loadState(home), registry, query, new Date());
+          return { text: rows.length ? rows.map((r) => JSON.stringify(r)).join("\n") : "No matching tabs." };
+        } catch (error) {
+          return failure(error instanceof Error ? error.message : String(error));
+        }
+      },
     }),
   ];
 }

@@ -10,12 +10,12 @@ import { tempDir } from "./helpers.ts";
 const ctx = (id = "A", workspaceId: string | null = "w") => ({ agent: { id, workspaceId, cwd: "/c" }, signal: new AbortController().signal }) as never;
 const F = { kind: "waiting" as const, what: "Pick", action: "Choose one", minutes: 5, why: "Blocks work" };
 const tool = (dir: string, name: string) => {
-  const t = pendingTools(dir).find((x) => x.name === name)!;
+  const t = pendingTools(dir, { home: join(dir, "no-paseo-home"), registry: join(dir, "archived-tabs.json"), restore: () => {} }).find((x) => x.name === name)!;
   return (input: unknown, c = ctx()) => (t as never as { execute: (i: unknown, c: unknown) => Promise<{ text?: string; isError?: boolean }> }).execute(t.input ? (t as never as { input: { parse(i: unknown): unknown } }).input.parse(input) : input, c);
 };
 
 test("exposes the four tools", (t) => {
-  assert.deepEqual(pendingTools(tempDir(t)).map((x) => x.name), ["pending_add", "pending_update", "pending_done", "pending_list"]);
+  assert.deepEqual(pendingTools(tempDir(t)).map((x) => x.name), ["pending_add", "pending_update", "pending_done", "pending_list", "pending_find"]);
 });
 
 test("pending_add names the new letter and stores cwd", async (t) => {
@@ -98,6 +98,6 @@ test("the open hook adds the tools to Claude tabs only once the cutover marker e
   assert.equal(await open("claude"), undefined);
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "cutover"), "");
-  assert.deepEqual((await open("claude"))?.tools.map((x) => x.name), ["pending_add", "pending_update", "pending_done", "pending_list"]);
+  assert.deepEqual((await open("claude"))?.tools.map((x) => x.name), ["pending_add", "pending_update", "pending_done", "pending_list", "pending_find"]);
   assert.equal(await open("codex"), undefined);
 });

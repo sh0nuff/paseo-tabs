@@ -3,19 +3,28 @@
 //
 //   node tools/pending.ts <add|update|done|drop|reopen|list> --agent <id> [--workspace <id>]
 //        [--letter x] [--json '{...}'] [--note '...'] [--cwd <dir>] [--dir <store dir>] [--home <Paseo home>]
+//   node tools/pending.ts auto-archive --agent <id>     archive the agent's workspace if still nothing is open
+//   node tools/pending.ts find <words...>                tabs to hand work to, one JSON line each
 //
 // Without --workspace, the agent's workspace comes from Paseo's own records (--home, else
 // $PASEO_HOME or ~/.paseo), and `add` takes that workspace's folder as its --cwd.
+// `add` for an agent whose workspace is archived restores the workspace first.
 // Prints the item (or the list) as JSON. On error prints the message, exit 1.
 
 import { parseArgs } from "node:util";
+import { registryPath } from "../server/archived-tabs.ts";
+import { autoArchive, findTabs, isArchived } from "../server/auto-archive.ts";
 import { loadState, paseoHome } from "../server/paseo-state.ts";
 import { addItem, finishItem, listOpen, pendingDir, reopenItem, updateItem } from "../server/pending-store.ts";
+import { paseoRunner, runRestore } from "../server/workspace-control.ts";
 
-const USAGE = "usage: pending.ts <add|update|done|drop|reopen|list> --agent <id> [--workspace <id>] [--letter x] [--json '{...}'] [--note '...'] [--cwd <dir>] [--home <Paseo home>]";
-const COMMANDS = ["add", "update", "done", "drop", "reopen", "list"];
+const USAGE =
+  "usage: pending.ts <add|update|done|drop|reopen|list> --agent <id> [--workspace <id>] [--letter x] [--json '{...}'] [--note '...'] [--cwd <dir>] [--home <Paseo home>]\n" +
+  "       pending.ts auto-archive --agent <id>\n" +
+  "       pending.ts find <words...>";
+const COMMANDS = ["add", "update", "done", "drop", "reopen", "list", "auto-archive", "find"];
 
-function main(): void {
+async function main(): Promise<void> {
   const { positionals, values } = parseArgs({
     allowPositionals: true,
     options: {
@@ -29,21 +38,31 @@ function main(): void {
       home: { type: "string" },
     },
   });
-  const [command] = positionals;
+  const [command, ...words] = positionals;
   if (!COMMANDS.includes(command)) throw new Error(USAGE);
   const dir = values.dir ?? pendingDir(process.env);
+  const home = values.home ?? paseoHome(process.env);
   const now = new Date();
+  if (command === "find") {
+    for (const row of findTabs(loadState(home), registryPath(process.env), words.join(" "), now)) process.stdout.write(`${JSON.stringify(row)}\n`);
+    return;
+  }
   const fields = values.json ? JSON.parse(values.json) : {};
   const need = (name: "agent" | "letter"): string => {
     const value = values[name];
     if (!value) throw new Error(`--${name} is required`);
     return value;
   };
+  if (command === "auto-archive") {
+    const line = await autoArchive({ agentId: need("agent"), dir, home, registry: registryPath(process.env), runner: paseoRunner(process.env), now });
+    process.stderr.write(`${line}\n`);
+    return;
+  }
   let ws = values.workspace;
   let cwd = values.cwd;
   if (!ws) {
     const agentId = need("agent");
-    const state = loadState(values.home ?? paseoHome(process.env));
+    const state = loadState(home);
     const agent = state.agents.find((a) => a.id === agentId);
     if (!agent?.workspaceId) throw new Error(`Paseo has no workspace for agent ${agentId}; pass --workspace`);
     ws = agent.workspaceId;
@@ -53,6 +72,8 @@ function main(): void {
   switch (command) {
     case "add":
       out = addItem(dir, ws, cwd ?? "", need("agent"), fields, now);
+      // The tab it is for comes back by itself when its workspace was archived.
+      if (isArchived(loadState(home), ws)) process.stderr.write(`${runRestore(ws, process.env)}\n`);
       break;
     case "update":
       out = updateItem(dir, ws, need("agent"), need("letter"), fields, now);
@@ -73,9 +94,7 @@ function main(): void {
   process.stdout.write(`${JSON.stringify(out, null, 2)}\n`);
 }
 
-try {
-  main();
-} catch (error) {
+main().catch((error) => {
   process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
   process.exit(1);
-}
+});

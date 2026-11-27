@@ -151,7 +151,7 @@ test("the plugin entry attaches the pending tools to Claude agents only, and onl
   writeFileSync(join(store, "cutover"), "");
   // The marker is read at each open, so no restart is needed.
   const claude = await hook({ request: { provider: "claude", tools: [] } });
-  assert.deepEqual(claude?.tools.map((x) => x.name), ["pending_add", "pending_update", "pending_done", "pending_list"]);
+  assert.deepEqual(claude?.tools.map((x) => x.name), ["pending_add", "pending_update", "pending_done", "pending_list", "pending_find"]);
   assert.equal(await hook({ request: { provider: "codex", tools: [] } }), undefined);
   assert.deepEqual(await handlers.get("pending.enabled")!({}), { enabled: true });
   for (const name of ["pending.unpick", "pending.enabled"]) assert.ok(handlers.has(name), name);

@@ -134,7 +134,8 @@ function stealStale(lock: string): void {
   }
 }
 
-function withLock<T>(path: string, work: () => T): T {
+/** Runs work while holding `${path}.lock`, the same lock every store writer takes. */
+export function withLock<T>(path: string, work: () => T): T {
   mkdirSync(join(path, ".."), { recursive: true });
   const lock = `${path}.lock`;
   const token = `${process.pid}.${randomBytes(8).toString("hex")}`;
