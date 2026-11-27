@@ -36,11 +36,18 @@ export const pendingUnpick = defineRpc({
   output: z.object({ ok: z.boolean() }),
 });
 
-/** Whether the Pending panel and tools are on: true once the cutover marker exists. */
+/**
+ * Whether the Pending panel and tools are on (mode "pending"), and the mode and auto-archive
+ * in force, worked out from the saved settings and what is on disk.
+ */
 export const pendingEnabled = defineRpc({
   name: "pending.enabled",
   input: z.object({}),
-  output: z.object({ enabled: z.boolean() }),
+  output: z.object({
+    enabled: z.boolean(),
+    mode: z.enum(["pending", "tabs-md"]).optional(),
+    autoArchive: z.boolean().optional(),
+  }),
 });
 
 /** Open items in every workspace whose what, action or why contains the query. */

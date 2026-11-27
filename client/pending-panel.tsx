@@ -27,7 +27,7 @@ export function PendingPanel({ theme, layout, workspaceId, navigation }: PluginW
   const [text, setText] = useState("");
   const term = text.trim();
 
-  // Nothing is listed until the cut-over marker exists; asked again every 30 seconds.
+  // Nothing is listed in mode tabs-md; asked again every 30 seconds.
   const enabled = useQuery({
     queryKey: ["paseo-pending-enabled"],
     queryFn: () => checkEnabled({}),
@@ -180,7 +180,7 @@ export function PendingPanel({ theme, layout, workspaceId, navigation }: PluginW
   if (!on) {
     return (
       <View style={[styles.screen, styles.content]}>
-        <Text style={styles.message}>{enabled.isPending ? "Loading…" : "The Pending panel starts at cut-over."}</Text>
+        <Text style={styles.message}>{enabled.isPending ? "Loading…" : "The Pending panel is off: this install uses the TABS.md file. Switch Mode under Settings, Plugins, Tabs."}</Text>
       </View>
     );
   }

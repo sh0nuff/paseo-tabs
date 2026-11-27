@@ -1,6 +1,6 @@
 {
   "name": "paseo-tabs",
-  "description": "The paseo-tabs plugin for Claude Code",
+  "description": "Paseo Tabs: the Pending panel's rule and hooks for Claude tabs in Paseo",
   "owner": {
     "name": "sh0nuff"
   },
@@ -8,7 +8,7 @@
     {
       "name": "paseo-tabs",
       "source": "./",
-      "description": "Gives every Claude tab in Paseo the TABS.md rule, so each tab keeps its own section of the workspace's live checklist current."
+      "description": "Gives every Claude tab in Paseo the Pending panel rule and the hooks that keep its list of what waits on you current. Pairs with the paseo-tabs Paseo plugin."
     }
   ]
 }

@@ -1,0 +1,20 @@
+export type Mode = "pending" | "tabs-md";
+export type SavedSettings = { mode?: string; autoArchive?: boolean; pendingStore?: boolean };
+type Env = Record<string, string | undefined>;
+
+export declare const PLUGIN_ID: string;
+export declare const SETTINGS_ID: string;
+export declare function stateRoot(env?: Env): string;
+export declare function tabsStateDir(env?: Env): string;
+export declare function pendingStoreDir(env?: Env): string;
+export declare function paseoHomeDir(env?: Env): string;
+export declare function cutoverPath(dir: string): string;
+export declare function hasCutover(dir: string): boolean;
+export declare function hasLegacyHistory(dir: string): boolean;
+export declare function savedSettings(env?: Env): SavedSettings;
+export declare function resolveMode(saved: SavedSettings | null | undefined, facts: { cutover: boolean; legacy: boolean }): Mode;
+export declare function resolveAutoArchive(saved: SavedSettings | null | undefined, facts: { cutover: boolean }): boolean;
+export declare function modeFor(dir: string, saved?: SavedSettings | null, env?: Env): Mode;
+export declare function autoArchiveFor(dir: string, saved?: SavedSettings | null, env?: Env): boolean;
+export declare function paseoPluginRoot(env?: Env): string | null;
+export declare function pluginRoot(env?: Env, fallback?: string | null): string | null;

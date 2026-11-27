@@ -3,8 +3,7 @@
 
 import type { PendingCard } from "../shared/pending-rpc.ts";
 import { loadState } from "./paseo-state.ts";
-import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { autoArchiveFor, cutoverPath, modeFor, type SavedSettings } from "../shared/install-state.mjs";
 import { allFiles, clearPicked, readPending, setPicked, type PendingItem } from "./pending-store.ts";
 
 function toCard(item: PendingItem): PendingCard {
@@ -52,18 +51,23 @@ export function pendingUnpickHandler(dir: string, workspaceId: string, agentId: 
   return { ok: true };
 }
 
-/** The marker the cut-over leaves in the store directory; session-start.mjs reads the same path. */
+/** The marker a 1.x cut-over leaves in the store directory; the hooks read the same path. */
 export function cutoverMarker(dir: string): string {
-  return join(dir, "cutover");
+  return cutoverPath(dir);
 }
 
-/** True when the pending store is the source: the setting, or the cut-over marker, checked at use time. */
-export function storeMode(display: { pendingStore?: boolean }, dir: string): boolean {
-  return display.pendingStore === true || existsSync(cutoverMarker(dir));
+/**
+ * True when the pending store is the source (mode "pending"), checked at use time: the
+ * cut-over marker, the saved mode, the old pendingStore switch, else no 1.x history.
+ */
+export function storeMode(display: SavedSettings, dir: string): boolean {
+  return modeFor(dir, display) === "pending";
 }
 
-export function pendingEnabledHandler(dir: string): { enabled: boolean } {
-  return { enabled: existsSync(cutoverMarker(dir)) };
+/** The mode and auto-archive in force, for the panel and the settings screen. */
+export function pendingEnabledHandler(dir: string, display: SavedSettings = {}) {
+  const mode = modeFor(dir, display);
+  return { enabled: mode === "pending", mode, autoArchive: autoArchiveFor(dir, display) };
 }
 
 export function pendingSearchHandler(dir: string, home: string, query: string) {

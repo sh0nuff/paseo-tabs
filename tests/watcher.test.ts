@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { DEFAULT_DISPLAY, TICKED_KEEP_MS } from "../server/tabs-file.ts";
@@ -167,17 +167,40 @@ test("an empty agent list leaves the clocks alone", (t) => {
   assert.equal(clock.observe("aaaaaaa", "\n**Waiting on you**\n- a) [ ] answer\n", new Date(NOW.getTime() + 8 * 24 * 3600 * 1000), 7), 1);
 });
 
-test("with pendingStore off the output for an existing file is unchanged by the view path", (t) => {
+test("in mode tabs-md the output for an existing file is unchanged by the view path", (t) => {
   const root = tempDir(t);
   const home = makeHome(root);
   const repo = gitInit(join(root, "repo"));
   writeAgent(home, { id: "aaaaaaa1", cwd: repo });
   writeFileSync(join(repo, "TABS.md"), "## 1. A title · aaaaaaa\n\n**Waiting on you**\n- a) [ ] answer (about 5 min)\n");
-  syncAll(home, NOW, { ...DEFAULT_DISPLAY, pendingStore: false } as typeof DEFAULT_DISPLAY, undefined, join(root, "pending"));
+  syncAll(home, NOW, { ...DEFAULT_DISPLAY, mode: "tabs-md" }, undefined, join(root, "pending"));
   assert.equal(
     readFileSync(join(repo, "TABS.md"), "utf8"),
     "## 🟠 1. A title · aaaaaaa\n\n**Waiting on you**\n- a) [ ] answer (about 5 min)\n",
   );
+});
+
+test("a 1.x install (an item clock beside the store) keeps writing TABS.md with no mode saved", (t) => {
+  const root = tempDir(t);
+  const home = makeHome(root);
+  const repo = gitInit(join(root, "repo"));
+  writeAgent(home, { id: "aaaaaaa1", cwd: repo });
+  writeFileSync(join(root, "items-0123abcd.json"), "{}");
+  writeFileSync(join(repo, "TABS.md"), "## 1. A title · aaaaaaa\n\n**Waiting on you**\n- a) [ ] answer (about 5 min)\n");
+  syncAll(home, NOW, DEFAULT_DISPLAY, undefined, join(root, "pending"));
+  assert.match(readFileSync(join(repo, "TABS.md"), "utf8"), /^## 🟠 1\. A title/m);
+});
+
+test("a fresh install in mode pending writes no TABS.md and no item clock", (t) => {
+  const root = tempDir(t);
+  const home = makeHome(root);
+  const repo = gitInit(join(root, "repo"));
+  writeAgent(home, { id: "aaaaaaa1", cwd: repo });
+  const clockFile = join(root, "items-feedbeef.json");
+  const clock = new ItemClock(clockFile);
+  assert.deepEqual(syncAll(home, NOW, DEFAULT_DISPLAY, clock, join(root, "pending")), {});
+  assert.equal(existsSync(join(repo, "TABS.md")), false);
+  assert.equal(existsSync(clockFile), false);
 });
 
 function cutoverSetup(t: Parameters<typeof tempDir>[0], ageDays: number) {

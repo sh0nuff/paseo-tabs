@@ -9,13 +9,15 @@ import { tempDir } from "./helpers.ts";
 
 const REMINDER = fileURLToPath(new URL("../claude/pending-reminder.mjs", import.meta.url));
 const STOP = fileURLToPath(new URL("../claude/pending-stop.mjs", import.meta.url));
-const F = { kind: "waiting" as const, what: "Sign in to Plex", action: "a", minutes: 3, why: "w" };
+const F = { kind: "waiting" as const, what: "Sign in to the dashboard", action: "a", minutes: 3, why: "w" };
 
 function setup(t: { after: (fn: () => void) => void }, marker = true) {
   const state = tempDir(t);
   const dir = join(state, "paseo-tabs", "pending");
   mkdirSync(dir, { recursive: true });
   if (marker) writeFileSync(join(dir, "cutover"), "");
+  // Without the marker, a 1.x item clock makes it a legacy install in mode tabs-md.
+  else writeFileSync(join(state, "paseo-tabs", "items-0123abcd.json"), "{}");
   return { state, dir };
 }
 
@@ -36,13 +38,13 @@ test("reminder lists this agent's open items only", (t) => {
   assert.equal(status, 0);
   const out = JSON.parse(stdout).hookSpecificOutput;
   assert.equal(out.hookEventName, "UserPromptSubmit");
-  assert.match(out.additionalContext, /a\) Sign in to Plex \(about 3 min\)/);
+  assert.match(out.additionalContext, /a\) Sign in to the dashboard \(about 3 min\)/);
   assert.match(out.additionalContext, /Own step/);
   assert.doesNotMatch(out.additionalContext, /Not mine/);
   assert.match(out.additionalContext, /Never add an item you can check yourself\.$/);
 });
 
-test("reminder prints nothing without marker, agent id or open items", (t) => {
+test("reminder prints nothing in a 1.x install without marker, or without agent id or open items", (t) => {
   const a = setup(t, false);
   addItem(a.dir, "w", "/c", "A", F, new Date());
   assert.equal(run(REMINDER, a.state, "A").stdout, "");
@@ -86,7 +88,7 @@ test("stop hook stays quiet when active, short, reconciled, or nothing is open",
   assert.equal(run(STOP, state, "A", JSON.stringify({ transcript_path: transcript(state, three.slice(0, 2), "s.jsonl") })).stdout, "");
   const mcp = transcript(state, [...three, { type: "tool_use", name: "mcp__paseo__pending_list", input: {} }], "m.jsonl");
   assert.equal(run(STOP, state, "A", JSON.stringify({ transcript_path: mcp })).stdout, "");
-  const cli = transcript(state, [...three, bash("node ~/git/paseo-tabs/tools/pending.ts list --agent A")], "c.jsonl");
+  const cli = transcript(state, [...three, bash("node /opt/paseo-tabs/tools/pending.ts list --agent A")], "c.jsonl");
   assert.equal(run(STOP, state, "A", JSON.stringify({ transcript_path: cli })).stdout, "");
   assert.equal(run(STOP, state, "B", JSON.stringify({ transcript_path: ok })).stdout, "");
   assert.equal(run(STOP, state, "A", "not json").stdout, "");

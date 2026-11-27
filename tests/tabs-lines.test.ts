@@ -30,7 +30,7 @@ test("each workspace gets its own open tab, name and first waiting item", (t) =>
   writeAgent(home, { id: "ccccccc3-full", cwd: repo, workspaceId: TWO });
   writeFileSync(
     join(repo, "TABS.md"),
-    "## 1. A title · aaaaaaa\n\n**Waiting on you**\n- a) [ ] Add the calendars (about 10 min) (OpenTodo task 1234abcd)\n\n" +
+    "## 1. A title · aaaaaaa\n\n**Waiting on you**\n- a) [ ] Add the calendars (about 10 min) (Tasks task 1234abcd)\n\n" +
       "## 1. C title · ccccccc\n\n**Claude's next steps**\n- b) [ ] Write the plan\n",
   );
 

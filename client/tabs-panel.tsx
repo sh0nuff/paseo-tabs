@@ -18,15 +18,14 @@ function summary(tab: TabRow): string {
 }
 
 export function TabsPanel(props: PluginWorkspacePanelProps) {
-  const settings = useSettings(displaySettings);
   const checkEnabled = useRpc(pendingEnabled);
-  // The cut-over marker counts as the setting being on.
-  const marker = useQuery({
+  // The daemon works out the mode: the saved setting, the 1.x cut-over marker, or a fresh install.
+  const mode = useQuery({
     queryKey: ["paseo-pending-enabled"],
     queryFn: () => checkEnabled({}),
     refetchInterval: 30_000,
   });
-  if ((settings.status === "ready" && settings.values.pendingStore) || marker.data?.enabled === true) return <PendingPanel {...props} />;
+  if (mode.data?.enabled === true) return <PendingPanel {...props} />;
   return <TabsList {...props} />;
 }
 

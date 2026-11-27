@@ -17,7 +17,7 @@ const STOP = fileURLToPath(new URL("../claude/pending-stop.mjs", import.meta.url
 const REMINDER = fileURLToPath(new URL("../claude/pending-reminder.mjs", import.meta.url));
 const PENDING = fileURLToPath(new URL("../tools/pending.ts", import.meta.url));
 const CONTROL = fileURLToPath(new URL("../tools/workspace-control.ts", import.meta.url));
-const F = { kind: "waiting" as const, what: "Sign in to Plex", action: "a", minutes: 3, why: "w" };
+const F = { kind: "waiting" as const, what: "Sign in to the dashboard", action: "a", minutes: 3, why: "w" };
 const WS = "wks_1111111aaaaaaa";
 const AGENT = "aaaaaaa1-full";
 const LINE = "Nothing further waiting on you.";
@@ -32,8 +32,8 @@ function world(t: T, { archived = false, marker = true } = {}) {
   mkdirSync(dir, { recursive: true });
   if (marker) writeFileSync(join(dir, "cutover"), "");
   const home = makeHome(root);
-  writeWorkspaces(home, [{ workspaceId: WS, cwd: "/work/one", title: "Phone notes app", archivedAt: archived ? "2026-11-27T10:00:00.000Z" : null }]);
-  writeAgent(home, { id: AGENT, cwd: "/work/one", workspaceId: WS, title: "ZenNotes trial" });
+  writeWorkspaces(home, [{ workspaceId: WS, cwd: "/work/one", title: "Billing service", archivedAt: archived ? "2026-11-27T10:00:00.000Z" : null }]);
+  writeAgent(home, { id: AGENT, cwd: "/work/one", workspaceId: WS, title: "Retry bug" });
   const bin = join(root, "bin");
   mkdirSync(bin);
   const log = join(root, "calls.log");
@@ -138,7 +138,7 @@ export async function connectToDaemon() {
   const still = run("unavailable"); // Paseo state still shows it archived
   assert.match(still.stdout, /not restored: active$/m);
   assert.equal(readRegistry(w.registry, now).length, 1);
-  writeWorkspaces(w.home, [{ workspaceId: WS, cwd: "/work/one", title: "Phone notes app", archivedAt: null }]);
+  writeWorkspaces(w.home, [{ workspaceId: WS, cwd: "/work/one", title: "Billing service", archivedAt: null }]);
   const live = run("unavailable");
   assert.match(live.stdout, /not restored: active, registry entry removed/);
   assert.deepEqual(readRegistry(w.registry, now), []);
@@ -245,6 +245,55 @@ test("stop hook does nothing with open items, no items ever, a sibling's open it
   for (const w of [open, never, sibling, off]) assert.deepEqual(w.calls(), []);
 });
 
+/** Saves the plugin's settings in the world's Paseo home, as Paseo does. */
+function saveSettings(w: ReturnType<typeof world>, values: Record<string, unknown>) {
+  mkdirSync(join(w.home, "plugin-settings", "paseo-tabs"), { recursive: true });
+  writeFileSync(join(w.home, "plugin-settings", "paseo-tabs", "display.json"), JSON.stringify({ version: 1, values }));
+}
+
+test("stop hook: autoArchive saved false wins over the marker; a fresh install has it off; saved true turns it on", (t) => {
+  const off = world(t);
+  saveSettings(off, { autoArchive: false });
+  seed(off);
+  closedItem(off);
+  assert.equal(hook(STOP, off.env, AGENT, { transcript_path: transcript(off.root, "All done.") }).stdout, "");
+  assert.equal(hook(STOP, off.env, AGENT, { transcript_path: transcript(off.root, LINE, "l.jsonl") }).stdout, "");
+
+  // No marker and no 1.x history: a fresh install in mode pending, auto-archive off by default.
+  const fresh = world(t, { marker: false });
+  seed(fresh);
+  closedItem(fresh);
+  assert.equal(hook(STOP, fresh.env, AGENT, { transcript_path: transcript(fresh.root, "All done.") }).stdout, "");
+
+  const on = world(t, { marker: false });
+  saveSettings(on, { autoArchive: true });
+  seed(on);
+  closedItem(on);
+  assert.match(hook(STOP, on.env, AGENT, { transcript_path: transcript(on.root, "All done.") }).stdout, BLOCK_LINE);
+  for (const w of [off, fresh]) assert.deepEqual(w.calls(), []);
+});
+
+test("with autoArchive off, the CLI neither archives nor restores", (t) => {
+  const w = world(t, { archived: true });
+  saveSettings(w, { autoArchive: false });
+  const add = spawnSync(process.execPath, [PENDING, "add", "--agent", AGENT, "--json", JSON.stringify(F), "--dir", w.dir, "--home", w.home], { env: w.env, encoding: "utf8" });
+  assert.equal(add.status, 0, add.stderr);
+  const archive = spawnSync(process.execPath, [PENDING, "auto-archive", "--agent", AGENT], { env: w.env, encoding: "utf8" });
+  assert.equal(archive.status, 0, archive.stderr);
+  assert.match(archive.stderr, /auto-archive is off/);
+  assert.deepEqual(w.calls(), []);
+});
+
+test("pending_add with autoArchive off leaves an archived workspace archived", async (t) => {
+  const w = world(t, { archived: true });
+  const restored: string[] = [];
+  const tool = pendingTools(w.dir, { home: w.home, registry: w.registry, restore: (id) => void restored.push(id), autoArchive: () => false }).find((x) => x.name === "pending_add") as AgentToolDefinition;
+  const exec = (tool as never as { execute: (i: unknown, c: unknown) => Promise<{ text: string }> }).execute;
+  const out = await exec(F, { agent: { id: AGENT, workspaceId: WS, cwd: "/c" }, signal: new AbortController().signal });
+  assert.doesNotMatch(out.text, /restored/);
+  assert.deepEqual(restored, []);
+});
+
 // The scheduled run
 
 function runner(status: Record<string, string>, archived: string[]): ControlRunner {
@@ -262,10 +311,10 @@ test("auto-archive archives an idle workspace with nothing open and records it",
   const archived: string[] = [];
   const now = new Date("2026-11-27T12:00:00Z");
   const line = await autoArchive({ agentId: AGENT, dir: w.dir, home: w.home, registry: w.registry, runner: runner({ [AGENT]: "idle" }, archived), now });
-  assert.match(line, /archived \("Phone notes app", tab aaaaaaa1-full\)/);
+  assert.match(line, /archived \("Billing service", tab aaaaaaa1-full\)/);
   assert.deepEqual(archived, [WS]);
   assert.deepEqual(readRegistry(w.registry, now), [
-    { workspaceId: WS, workspaceName: "Phone notes app", agentId: AGENT, agentTitle: "ZenNotes trial", cwd: "/work/one", archivedAt: now.toISOString() },
+    { workspaceId: WS, workspaceName: "Billing service", agentId: AGENT, agentTitle: "Retry bug", cwd: "/work/one", archivedAt: now.toISOString() },
   ]);
 });
 
@@ -281,12 +330,12 @@ test("auto-archive treats closed tabs as resting and records every tab of the wo
   assert.deepEqual(archived, [WS]);
   assert.deepEqual(
     readRegistry(w.registry, now).map((e) => [e.agentId, e.agentTitle, e.workspaceName]).sort(),
-    [[AGENT, "ZenNotes trial", "Phone notes app"], ["ccccccc3-other", "Second tab", "Phone notes app"]],
+    [[AGENT, "Retry bug", "Billing service"], ["ccccccc3-other", "Second tab", "Billing service"]],
   );
-  writeWorkspaces(w.home, [{ workspaceId: WS, cwd: "/work/one", title: "Phone notes app", archivedAt: now.toISOString() }]);
+  writeWorkspaces(w.home, [{ workspaceId: WS, cwd: "/work/one", title: "Billing service", archivedAt: now.toISOString() }]);
   assert.deepEqual(
     findTabs(loadState(w.home), w.registry, "second", now).map((r) => [r.agentId, r.workspaceName, r.archived]),
-    [["ccccccc3-other", "Phone notes app", true]],
+    [["ccccccc3-other", "Billing service", true]],
   );
 });
 
@@ -308,7 +357,7 @@ test("a failed archive keeps the registry entries only when Paseo shows the work
   const failing = (home: string, archiveIt: boolean): ControlRunner => ({
     ...runner({ [AGENT]: "idle" }, []),
     archive: async () => {
-      if (archiveIt) writeWorkspaces(home, [{ workspaceId: WS, cwd: "/work/one", title: "Phone notes app", archivedAt: "2026-11-27T12:00:00.000Z" }]);
+      if (archiveIt) writeWorkspaces(home, [{ workspaceId: WS, cwd: "/work/one", title: "Billing service", archivedAt: "2026-11-27T12:00:00.000Z" }]);
       throw new Error("timed out");
     },
   });
@@ -414,20 +463,20 @@ test("adding a waiting item for an archived tab restores its workspace, a next i
 test("find matches live and archived tabs by name words and id prefix, and drops revived entries", (t) => {
   const w = world(t);
   const now = new Date();
-  recordArchived(w.registry, [entry("wks_archived1", now.toISOString(), { workspaceName: "Kitchen tablet", agentTitle: "Kiosk page", agentId: "ddddddd4-x" })], now);
+  recordArchived(w.registry, [entry("wks_archived1", now.toISOString(), { workspaceName: "Docs site", agentTitle: "Search page", agentId: "ddddddd4-x" })], now);
   recordArchived(w.registry, [entry(WS, now.toISOString())], now); // live again in Paseo
   const state = loadState(w.home);
-  assert.deepEqual(findTabs(state, w.registry, "phone zennotes", now).map((r) => [r.agentId, r.archived]), [[AGENT, false]]);
-  assert.deepEqual(findTabs(state, w.registry, "kitchen", now).map((r) => [r.workspaceId, r.archived]), [["wks_archived1", true]]);
-  assert.deepEqual(findTabs(state, w.registry, "ddddddd", now).map((r) => r.agentTitle), ["Kiosk page"]);
-  assert.deepEqual(findTabs(state, w.registry, "aaaaaaa1", now).map((r) => r.workspaceName), ["Phone notes app"]);
-  assert.deepEqual(findTabs(state, w.registry, "kitchen phone", now), []);
+  assert.deepEqual(findTabs(state, w.registry, "billing retry", now).map((r) => [r.agentId, r.archived]), [[AGENT, false]]);
+  assert.deepEqual(findTabs(state, w.registry, "docs", now).map((r) => [r.workspaceId, r.archived]), [["wks_archived1", true]]);
+  assert.deepEqual(findTabs(state, w.registry, "ddddddd", now).map((r) => r.agentTitle), ["Search page"]);
+  assert.deepEqual(findTabs(state, w.registry, "aaaaaaa1", now).map((r) => r.workspaceName), ["Billing service"]);
+  assert.deepEqual(findTabs(state, w.registry, "docs billing", now), []);
   assert.deepEqual(readRegistry(w.registry, now).map((e) => e.workspaceId), ["wks_archived1"]);
 
-  const cli = spawnSync(process.execPath, [PENDING, "find", "kiosk", "--home", w.home], { env: w.env, encoding: "utf8" });
+  const cli = spawnSync(process.execPath, [PENDING, "find", "search", "--home", w.home], { env: w.env, encoding: "utf8" });
   assert.equal(cli.status, 0, cli.stderr);
   const rows = cli.stdout.trim().split("\n").map((l) => JSON.parse(l));
-  assert.deepEqual(rows.map((r) => [r.workspaceId, r.workspaceName, r.agentId, r.archived]), [["wks_archived1", "Kitchen tablet", "ddddddd4-x", true]]);
+  assert.deepEqual(rows.map((r) => [r.workspaceId, r.workspaceName, r.agentId, r.archived]), [["wks_archived1", "Docs site", "ddddddd4-x", true]]);
   assert.equal(registryPath(w.env), w.registry);
 });
 
@@ -435,8 +484,8 @@ test("pending_find answers with JSON lines", async (t) => {
   const w = world(t);
   const tool = pendingTools(w.dir, { home: w.home, registry: w.registry, restore: () => {} }).find((x) => x.name === "pending_find")!;
   const exec = (tool as never as { execute: (i: unknown, c: unknown) => Promise<{ text: string }> }).execute;
-  const out = await exec({ query: "notes" }, {});
-  assert.equal(JSON.parse(out.text).agentTitle, "ZenNotes trial");
+  const out = await exec({ query: "billing" }, {});
+  assert.equal(JSON.parse(out.text).agentTitle, "Retry bug");
   assert.equal((await exec({ query: "nothing-like-it" }, {})).text, "No matching tabs.");
 });
 

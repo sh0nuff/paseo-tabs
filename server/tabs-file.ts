@@ -55,8 +55,12 @@ export interface DisplayOptions {
   workspaceOrder: "newest" | "latestMessage";
   /** Finished items leave a day after they were ticked. Only false turns this off. */
   removeFinished: boolean;
-  /** Show the pending store everywhere. The cut-over marker turns this on as well, see storeMode. */
+  /** The 1.x-era switch for the pending store; `mode` replaces it. See shared/install-state.mjs. */
   pendingStore?: boolean;
+  /** "pending" (the Pending panel) or "tabs-md" (the 1.x TABS.md file); unset means worked out from disk. */
+  mode?: "pending" | "tabs-md";
+  /** Archive a workspace once nothing waits on the user; unset means on only after a 1.x cut-over. */
+  autoArchive?: boolean;
 }
 
 export const DEFAULT_DISPLAY: DisplayOptions = {

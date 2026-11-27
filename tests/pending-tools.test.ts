@@ -91,13 +91,31 @@ test("pending_update with only a letter says nothing to update", async (t) => {
   assert.equal(r.text, "Nothing to update.");
 });
 
-test("the open hook adds the tools to Claude tabs only once the cutover marker exists", async (t) => {
+test("the open hook adds the tools to Claude tabs on a fresh install", async (t) => {
   const dir = pendingDir({ XDG_STATE_HOME: tempDir(t) });
   const hook = pendingToolsHook(dir);
   const open = (provider: string) => hook({ request: { provider, tools: [] as AgentToolDefinition[] } });
-  assert.equal(await open("claude"), undefined);
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "cutover"), "");
   assert.deepEqual((await open("claude"))?.tools.map((x) => x.name), ["pending_add", "pending_update", "pending_done", "pending_list", "pending_find"]);
   assert.equal(await open("codex"), undefined);
+});
+
+test("the open hook leaves a 1.x install without tools until the cutover marker exists", async (t) => {
+  const dir = pendingDir({ XDG_STATE_HOME: tempDir(t) });
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "..", "items-0123abcd.json"), "{}");
+  const hook = pendingToolsHook(dir);
+  const open = (provider: string) => hook({ request: { provider, tools: [] as AgentToolDefinition[] } });
+  assert.equal(await open("claude"), undefined);
+  writeFileSync(join(dir, "cutover"), "");
+  assert.deepEqual((await open("claude"))?.tools.map((x) => x.name), ["pending_add", "pending_update", "pending_done", "pending_list", "pending_find"]);
+});
+
+test("the open hook follows the enabled check it is given", async (t) => {
+  const dir = pendingDir({ XDG_STATE_HOME: tempDir(t) });
+  let on = false;
+  const hook = pendingToolsHook(dir, undefined, () => on);
+  const open = () => hook({ request: { provider: "claude", tools: [] as AgentToolDefinition[] } });
+  assert.equal(await open(), undefined);
+  on = true;
+  assert.equal((await open())?.tools.length, 5);
 });

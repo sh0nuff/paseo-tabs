@@ -1,7 +1,8 @@
-import { type PluginSurfaceProps, useSettings } from "@getpaseo/plugin/client";
+import { type PluginSurfaceProps, useRpc, useSettings } from "@getpaseo/plugin/client";
 import { SettingsAction, SettingsSection, SettingsSelect, SettingsSwitch } from "@getpaseo/plugin/client/ui";
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
+import { pendingEnabled } from "../shared/pending-rpc.ts";
 import { type DisplayValues, displaySettings } from "../shared/settings.ts";
 import { PALETTE_OPTIONS, type PaletteName } from "./palettes.ts";
 
@@ -13,6 +14,10 @@ const OVERDUE = [
   { label: "30 days", value: "30" },
   { label: "Never", value: "0" },
 ];
+const MODES: { label: string; value: "pending" | "tabs-md" }[] = [
+  { label: "Pending panel", value: "pending" },
+  { label: "TABS.md file (1.x, legacy)", value: "tabs-md" },
+];
 const ORDERS: { label: string; value: DisplayValues["workspaceOrder"] }[] = [
   { label: "Newest first", value: "newest" },
   { label: "Latest message first", value: "latestMessage" },
@@ -20,6 +25,14 @@ const ORDERS: { label: string; value: DisplayValues["workspaceOrder"] }[] = [
 
 export function SettingsScreen({ theme, layout }: PluginSurfaceProps) {
   const settings = useSettings(displaySettings);
+  // The mode and auto-archive in force, worked out by the daemon when they were never saved.
+  // Plain state rather than a query, so this screen needs nothing from the host but the RPC.
+  const checkEnabled = useRpc(pendingEnabled);
+  const [effective, setEffective] = useState<{ mode?: "pending" | "tabs-md"; autoArchive?: boolean } | null>(null);
+  const refreshEffective = useCallback(() => {
+    checkEnabled({}).then(setEffective, () => setEffective(null));
+  }, [checkEnabled]);
+  useEffect(refreshEffective, [refreshEffective]);
 
   const styles = useMemo(
     () => ({
@@ -62,11 +75,30 @@ export function SettingsScreen({ theme, layout }: PluginSurfaceProps) {
     // fetches the current one, so the next change can succeed.
     const saved = await settings.save({ ...values, ...change }, settings.revision);
     if (!saved) await settings.reload();
+    refreshEffective();
   };
+  const mode = effective?.mode ?? values.mode ?? "pending";
+  const autoArchive = effective?.autoArchive ?? values.autoArchive ?? false;
+  const legacy = mode === "tabs-md";
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <SettingsSection title="TABS.md and the panel">
+      <SettingsSection title="Tabs">
+        <SettingsSelect
+          label="Mode"
+          hint="Pending panel: each Claude tab keeps its items with the pending tools, and the panel shows them. TABS.md file: the 1.x checklist file in each repo. A 1.x install keeps TABS.md until you switch; once a 1.x cut-over marker exists the Pending panel stays on."
+          value={mode}
+          options={MODES}
+          disabled={settings.saving}
+          onValueChange={(next) => void save({ mode: next as DisplayValues["mode"] })}
+        />
+        <SettingsSwitch
+          label="Archive finished workspaces"
+          hint="When every pending item in a workspace is closed, the tab ends with “Nothing further waiting on you.” and the workspace is archived about 10 minutes later, unless you write or dictate first. A new item waiting on you brings it back. Pending panel only."
+          value={autoArchive}
+          disabled={settings.saving || legacy}
+          onValueChange={(next) => void save({ autoArchive: next })}
+        />
         <SettingsSwitch
           label="Status dots"
           hint="A dot before each open tab: red when something has waited on you too long, orange when something waits on you, blue when only Claude has next steps, a tick when nothing is open."
@@ -98,27 +130,22 @@ export function SettingsScreen({ theme, layout }: PluginSurfaceProps) {
           disabled={settings.saving}
           onValueChange={(days) => void save({ overdueAfterDays: Number(days) })}
         />
+      </SettingsSection>
+      <SettingsSection title="TABS.md file (legacy)">
         <SettingsSelect
           label="Workspace order"
           hint="How the workspace groups run when one TABS.md holds tabs from more than one workspace. Pick the order your Paseo sidebar uses. Pinned workspaces come first and archived ones last."
           value={values.workspaceOrder}
           options={ORDERS}
-          disabled={settings.saving}
+          disabled={settings.saving || !legacy}
           onValueChange={(workspaceOrder) => void save({ workspaceOrder })}
         />
         <SettingsSwitch
           label="Remove finished items"
           hint="A ticked item leaves TABS.md a day after it was ticked. The highest letter in each section stays, so a tab that follows the rule never reuses a letter."
           value={values.removeFinished}
-          disabled={settings.saving}
+          disabled={settings.saving || !legacy}
           onValueChange={(removeFinished) => void save({ removeFinished })}
-        />
-        <SettingsSwitch
-          label="Use the Pending panel instead of TABS.md"
-          hint="When on, the Tabs panel shows the Pending panel instead."
-          value={values.pendingStore}
-          disabled={settings.saving}
-          onValueChange={(pendingStore) => void save({ pendingStore })}
         />
       </SettingsSection>
       <SettingsSection title="Panel colours">

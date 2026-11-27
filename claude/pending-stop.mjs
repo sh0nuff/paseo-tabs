@@ -2,7 +2,7 @@
 //
 // 1. When a tab did real work this turn (3 or more tool uses), touched no pending tool,
 //    and still has open items, block once so it reconciles its list.
-// 2. When every item in the tab's workspace is closed and one was closed since the last
+// 2. With the plugin's autoArchive setting on: when every item in the tab's workspace is closed and one was closed since the last
 //    time this ran, the workspace is archived: the tab is asked to end its reply with
 //    the line "Nothing further waiting on you."; once that is its last line, an archive
 //    is scheduled 10 minutes out, so the user can read and answer first. The scheduled
@@ -16,7 +16,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { PENDING_CLI, agentWorkspace, openItemsForAgent, stateRoot, storeFiles, storeOn, workspaceArchived } from "./pending-lib.mjs";
+import { PENDING_CLI, agentWorkspace, autoArchiveOn, openItemsForAgent, stateRoot, storeFiles, storeOn, workspaceArchived } from "./pending-lib.mjs";
 
 const LINE = "Nothing further waiting on you";
 const DELAY_S = 600;
@@ -107,7 +107,7 @@ function scheduleArchive(agentId) {
 /** Returns the block reason, or null after scheduling or when nothing applies. */
 function autoArchive(input, turn) {
   const agentId = process.env.PASEO_AGENT_ID;
-  if (!agentId || !storeOn()) return null;
+  if (!agentId || !storeOn() || !autoArchiveOn()) return null;
   const files = storeFiles().filter((f) => f.items.some((i) => i && i.agentId === agentId));
   if (files.length === 0) return null; // this tab never had an item
   const items = files.flatMap((f) => f.items);
@@ -132,7 +132,7 @@ function autoArchive(input, turn) {
     return null;
   }
   if (input.stop_hook_active === true) return null; // asked already this turn; the next turn asks again
-  return "All pending items are closed. End your reply with the line: Nothing further waiting on you. This workspace is then archived automatically. If you have not run the wrapup skill in this tab yet, run it first.";
+  return "All pending items are closed. End your reply with the line: Nothing further waiting on you. This workspace is then archived automatically. If you were given a wrap-up skill or routine for ending work and have not run it in this tab yet, run it first.";
 }
 
 try {

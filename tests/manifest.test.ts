@@ -7,7 +7,7 @@ import { assertPluginCompatibility } from "@getpaseo/protocol/plugin-requirement
 const manifest = JSON.parse(readFileSync(new URL("../paseo-plugin.json", import.meta.url), "utf8"));
 
 // The Paseo app runs this same check before it loads a plugin's panel and
-// commands, and skips the plugin quietly when it fails. The floor is 0.17.0 (Jon's desktop app was 0.17.3 at cut-over, 2026-11-26),
+// commands, and skips the plugin quietly when it fails. The floor is 0.17.0,
 // which the pending panel's agent tools and send() need.
 test("the manifest lets Paseo apps from 0.17.0 load the plugin", () => {
   for (const version of ["0.17.0", "0.17.3", "0.17.5", "0.18.0"]) {

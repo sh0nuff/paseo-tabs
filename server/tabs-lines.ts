@@ -11,8 +11,8 @@ import { DEFAULT_DISPLAY, type DisplayOptions, type TabEntry, planFolder } from 
 
 const MAX_WAITING = 160;
 const RANK = { overdue: 0, waiting: 1, next: 2, done: 3 } as const;
-// The "(about 10 min)" and "(OpenTodo task <id>)" endings the rule asks tabs to add.
-const ENDING = /\s*\((?:about\s+\d[^()]*|OpenTodo task\s[^()]*)\)\s*$/i;
+// The "(about 10 min)" ending the rule asks tabs to add, and "(<App> task <id>)" links some tools add.
+const ENDING = /\s*\((?:about\s+\d[^()]*|[A-Za-z][\w-]* task\s[^()]*)\)\s*$/i;
 const LINK = /\[([^\]]*)\]\([^)]*\)/g;
 const MARKUP = /\*\*|__|~~|`/g;
 

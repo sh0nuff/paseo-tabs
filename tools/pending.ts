@@ -15,6 +15,7 @@
 // Prints the item (or the list) as JSON. On error prints the message, exit 1.
 
 import { parseArgs } from "node:util";
+import { autoArchiveFor, savedSettings } from "../shared/install-state.mjs";
 import { registryPath } from "../server/archived-tabs.ts";
 import { scheduleAutoArchive } from "../server/schedule-archive.ts";
 import { autoArchive, findTabs, isArchived } from "../server/auto-archive.ts";
@@ -51,6 +52,8 @@ async function main(): Promise<void> {
   if (!COMMANDS.includes(command)) throw new Error(USAGE);
   const dir = values.dir ?? pendingDir(process.env);
   const home = values.home ?? paseoHome(process.env);
+  // The plugin's saved settings live in the Paseo home, so --home picks them too.
+  const autoArchiveOn = () => autoArchiveFor(dir, savedSettings({ ...process.env, PASEO_HOME: home }));
   const now = new Date();
   if (command === "find") {
     for (const row of findTabs(loadState(home), registryPath(process.env), words.join(" "), now)) process.stdout.write(`${JSON.stringify(row)}\n`);
@@ -75,6 +78,10 @@ async function main(): Promise<void> {
     const attempt = values.attempt ? Number(values.attempt) : 0;
     if (!Number.isInteger(attempt) || attempt < 0) throw new Error(`--attempt is not a count: ${values.attempt}`);
     const agentId = need("agent");
+    if (!autoArchiveOn()) {
+      process.stderr.write("auto-archive is off in the plugin's settings; nothing archived\n");
+      return;
+    }
     const postpone = (next: number) => scheduleAutoArchive(process.argv[1], agentId, scheduledAt ?? now, next);
     const line = await autoArchive({ agentId, dir, home, registry: registryPath(process.env), runner: paseoRunner(process.env), now, scheduledAt, attempt, postpone });
     process.stderr.write(`${line}\n`);
@@ -94,8 +101,8 @@ async function main(): Promise<void> {
   switch (command) {
     case "add":
       out = addItem(dir, ws, cwd ?? "", need("agent"), fields, now);
-      // New work waiting on the user brings an archived workspace back; a `next` item does not.
-      if (fields.kind === "waiting" && isArchived(loadState(home), ws)) process.stderr.write(`${runRestore(ws, process.env)}\n`);
+      // With auto-archive on, new work waiting on the user brings an archived workspace back; a `next` item does not.
+      if (fields.kind === "waiting" && autoArchiveOn() && isArchived(loadState(home), ws)) process.stderr.write(`${runRestore(ws, process.env)}\n`);
       break;
     case "update":
       out = updateItem(dir, ws, need("agent"), need("letter"), fields, now);

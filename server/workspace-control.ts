@@ -3,11 +3,12 @@
 // reading an agent's status use the CLI. Everything goes through a runner, so tests
 // pass a fake one and never touch the daemon.
 
-import { execFile, spawn, spawnSync } from "node:child_process";
+import { execFile, execFileSync, spawn, spawnSync } from "node:child_process";
 import { promisify } from "node:util";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { paseoPluginRoot } from "../shared/install-state.mjs";
 
 export type Recovery = { kind: string; action?: string; reason?: string; message?: string };
 
@@ -40,8 +41,23 @@ function onPath(name: string, env: Record<string, string | undefined>): string |
   return null;
 }
 
-/** The installed @getpaseo/cli package folder: $PASEO_CLI_ROOT, else found from the `paseo` command. */
-export function paseoCliRoot(env: Record<string, string | undefined> = process.env): string {
+/** npm's global package folder (`npm root -g`), or null when npm is missing or fails. */
+function npmGlobalRoot(env: Record<string, string | undefined>): string | null {
+  try {
+    const out = execFileSync("npm", ["root", "-g"], { encoding: "utf8", env: env as NodeJS.ProcessEnv, timeout: 10_000, stdio: ["ignore", "pipe", "ignore"] }).trim();
+    return out || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The installed @getpaseo/cli package folder, used for restoring workspaces:
+ *   1. $PASEO_CLI_ROOT when set;
+ *   2. found from the `paseo` command on PATH (the folder above it whose package.json is @getpaseo/cli);
+ *   3. `$(npm root -g)/@getpaseo/cli`, where `npm install -g @getpaseo/cli` puts it.
+ */
+export function paseoCliRoot(env: Record<string, string | undefined> = process.env, npmRoot: (env: Record<string, string | undefined>) => string | null = npmGlobalRoot): string {
   if (env.PASEO_CLI_ROOT) return env.PASEO_CLI_ROOT;
   const bin = onPath("paseo", env);
   if (bin) {
@@ -55,7 +71,9 @@ export function paseoCliRoot(env: Record<string, string | undefined> = process.e
       dir = dirname(dir);
     }
   }
-  return join(env.HOME ?? "", ".npm-global", "lib", "node_modules", "@getpaseo", "cli");
+  const root = npmRoot(env);
+  if (root) return join(root, "@getpaseo", "cli");
+  throw new Error("Paseo's CLI was not found: put `paseo` on PATH, or set PASEO_CLI_ROOT to the @getpaseo/cli folder");
 }
 
 type Client = {
@@ -96,14 +114,17 @@ export function paseoRunner(env: Record<string, string | undefined> = process.en
 }
 
 // The daemon loads the server half as a bundle, where import.meta.url is undefined, so
-// the path is worked out when needed and falls back to the checkout the daemon loads.
-function controlCli(env: Record<string, string | undefined> = process.env): string {
+// the path is worked out when needed and falls back to the folder Paseo's config.json
+// says the plugin is installed in.
+export function controlCli(env: Record<string, string | undefined> = process.env, here: string | null | undefined = import.meta.url): string {
   try {
-    if (typeof import.meta.url === "string") return join(dirname(fileURLToPath(import.meta.url)), "..", "tools", "workspace-control.ts");
+    if (typeof here === "string") return join(dirname(fileURLToPath(here)), "..", "tools", "workspace-control.ts");
   } catch {
     // fall through
   }
-  return join(env.HOME ?? "", "git", "paseo-tabs", "tools", "workspace-control.ts");
+  const root = paseoPluginRoot(env);
+  if (!root) throw new Error("paseo-tabs: Paseo's config.json names no folder for this plugin; set PASEO_TABS_CONTROL");
+  return join(root, "tools", "workspace-control.ts");
 }
 
 /** The command that runs tools/workspace-control.ts, or $PASEO_TABS_CONTROL (a JSON array) when set. */

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import type { PaseoState } from "../server/paseo-state.ts";
 import type { PendingFile } from "../server/pending-store.ts";
@@ -35,13 +35,15 @@ function repoWithStore(t: { after: (fn: () => void) => void }) {
   const repo = gitInit(join(root, "repo"));
   const dir = join(root, "pending");
   mkdirSync(dir);
+  // The view is kept only for installs that came from 1.x, after cut-over.
+  writeFileSync(join(dir, "cutover"), "");
   writeWorkspaces(home, [{ workspaceId: "wks_1111111aaaaaaa", cwd: repo, title: "One" }]);
   return { home, repo, dir };
 }
 const item = (agentId: string, letter: string, status: "open" | "done", kind: "waiting" | "next" = "waiting") => ({
   letter, agentId, kind, what: `item ${letter}`, action: "x", minutes: 5, why: "y", status, picked: false,
   created: "2026-11-20T10:00:00-05:00", changed: "2026-11-20T10:00:00-05:00",
-  done: status === "done" ? "2026-11-20T11:00:00-05:00" : null, note: null, opentodo: null,
+  done: status === "done" ? "2026-11-20T11:00:00-05:00" : null, note: null, linkedTask: null,
 });
 
 test("syncAll with pendingStore writes the view and ignores edits to the file", (t) => {
@@ -112,6 +114,7 @@ test("a closed tab moved out and then reactivated has one block in TABS.md and n
 
 test("the watcher renders the view once only the cut-over marker exists, without a restart", async (t) => {
   const { home, repo, dir } = repoWithStore(t);
+  rmSync(join(dir, "cutover"));
   writeAgent(home, { id: "aaaaaaa1", cwd: repo });
   writeFileSync(join(dir, "wks_1111111aaaaaaa.json"), JSON.stringify({ workspaceId: "wks_1111111aaaaaaa", cwd: repo, highest: {}, items: [item("aaaaaaa1", "a", "open")] }));
   writeFileSync(join(repo, "TABS.md"), "## 1. A title · aaaaaaa\n\n**Waiting on you**\n- z) [ ] typed by hand\n");

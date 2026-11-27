@@ -1,8 +1,8 @@
 {
   "name": "paseo-tabs",
   "displayName": "Paseo Tabs",
-  "version": "0.1.15",
-  "description": "Gives every Claude tab in Paseo the TABS.md rule, so each tab keeps its own section of the workspace's live checklist current.",
+  "version": "2.0.0",
+  "description": "The Claude Code half of the Paseo Tabs plugin: gives each Claude tab in Paseo the Pending panel rule, and hooks that keep its pending list reconciled (or the 1.x TABS.md rule on installs that still use it).",
   "author": {
     "name": "sh0nuff"
   },
@@ -12,6 +12,7 @@
   "keywords": [
     "paseo",
     "tabs",
+    "pending",
     "checklist"
   ],
   "hooks": "./claude/hooks.json"

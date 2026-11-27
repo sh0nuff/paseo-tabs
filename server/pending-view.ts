@@ -1,5 +1,5 @@
 // TABS.md as a read-only view of the pending store, kept for a week after the
-// cut-over so the OpenTodo sync, which still reads TABS.md, keeps working.
+// cut-over so tools that still read TABS.md keep working.
 // Paseo's records give the sections, their order and numbers (through planFolder,
 // as in pending-lines.ts); the store gives the items. Nothing written to the
 // file is read back.

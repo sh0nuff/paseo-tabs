@@ -27,7 +27,8 @@ export type PendingItem = {
   changed: string;
   done: string | null;
   note: string | null;
-  opentodo: string | null;
+  /** The id of a task in another app this item is linked to, carried over from a TABS.md "(<App> task <id>)" ending by the import tool. */
+  linkedTask: string | null;
 };
 
 export type PendingFile = {
@@ -220,7 +221,7 @@ export function addItem(dir: string, ws: string, cwd: string, agentId: string, f
     const time = localIso(now);
     const item: PendingItem = {
       letter, agentId, kind: fields.kind, what: fields.what, action: fields.action, minutes: fields.minutes, why: fields.why,
-      status: "open", picked: false, created: time, changed: time, done: null, note: null, opentodo: null,
+      status: "open", picked: false, created: time, changed: time, done: null, note: null, linkedTask: null,
     };
     file.items.push(item);
     file.highest[agentId] = letter;

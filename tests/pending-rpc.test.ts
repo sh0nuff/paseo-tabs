@@ -69,22 +69,40 @@ test("a second pick of the same item succeeds and keeps it picked; unpick clears
   assert.match(pendingPickHandler(dir, "w", "A", "a", T0).message, /\(item a\)$/);
 });
 
-test("pending.enabled follows the cutover marker", (t) => {
-  const dir = join(tempDir(t), "pending");
-  assert.deepEqual(pendingEnabledHandler(dir), { enabled: false });
+/** A store folder with 1.x history: an item clock beside it. */
+function legacyStore(root: string): string {
+  const dir = join(root, "pending");
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "cutover"), "");
-  assert.deepEqual(pendingEnabledHandler(dir), { enabled: true });
+  writeFileSync(join(root, "items-0123abcd.json"), "{}");
+  return dir;
+}
+
+test("pending.enabled: a fresh install is on, with auto-archive off", (t) => {
+  const dir = join(tempDir(t), "pending");
+  assert.deepEqual(pendingEnabledHandler(dir), { enabled: true, mode: "pending", autoArchive: false });
 });
 
-test("storeMode is on for the setting or the marker, off for neither", (t) => {
-  const dir = join(tempDir(t), "pending");
+test("pending.enabled: a 1.x install is off until the cutover marker, which also turns auto-archive on", (t) => {
+  const dir = legacyStore(tempDir(t));
+  assert.deepEqual(pendingEnabledHandler(dir), { enabled: false, mode: "tabs-md", autoArchive: false });
+  writeFileSync(join(dir, "cutover"), "");
+  assert.deepEqual(pendingEnabledHandler(dir), { enabled: true, mode: "pending", autoArchive: true });
+  assert.deepEqual(pendingEnabledHandler(dir, { autoArchive: false }), { enabled: true, mode: "pending", autoArchive: false });
+});
+
+test("storeMode: the marker forces it on, else the saved mode, else pendingStore, else no 1.x history", (t) => {
+  const fresh = join(tempDir(t), "pending");
+  assert.equal(storeMode({}, fresh), true);
+  assert.equal(storeMode({ mode: "tabs-md" }, fresh), false);
+  const dir = legacyStore(tempDir(t));
   assert.equal(storeMode({}, dir), false);
   assert.equal(storeMode({ pendingStore: false }, dir), false);
   assert.equal(storeMode({ pendingStore: true }, dir), true);
-  mkdirSync(dir, { recursive: true });
+  assert.equal(storeMode({ mode: "pending" }, dir), true);
+  assert.equal(storeMode({ mode: "tabs-md", pendingStore: true }, dir), false);
   writeFileSync(join(dir, "cutover"), "");
   assert.equal(storeMode({ pendingStore: false }, dir), true);
+  assert.equal(storeMode({ mode: "tabs-md" }, dir), true);
 });
 
 test("list cards carry created", (t) => {

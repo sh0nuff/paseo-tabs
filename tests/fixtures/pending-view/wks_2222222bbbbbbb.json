@@ -19,7 +19,7 @@
       "changed": "2026-11-20T10:00:00-05:00",
       "done": "2026-11-21T10:00:00-05:00",
       "note": null,
-      "opentodo": null
+      "linkedTask": null
     },
     {
       "letter": "b",
@@ -35,7 +35,7 @@
       "changed": "2026-11-20T10:00:00-05:00",
       "done": "2026-11-22T10:00:00-05:00",
       "note": null,
-      "opentodo": null
+      "linkedTask": null
     }
   ]
 }

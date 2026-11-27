@@ -3,11 +3,10 @@
 
 import { z } from "zod";
 import { defineAgentTool, type AgentToolContext, type AgentToolDefinition, type AgentToolResult } from "@getpaseo/plugin/server";
-import { existsSync } from "node:fs";
+import { autoArchiveFor, modeFor } from "../shared/install-state.mjs";
 import { registryPath } from "./archived-tabs.ts";
 import { findTabs, isArchived } from "./auto-archive.ts";
 import { loadState, paseoHome } from "./paseo-state.ts";
-import { cutoverMarker } from "./pending-rpc.ts";
 import { addItem, finishItem, listOpen, updateItem } from "./pending-store.ts";
 import { startRestore } from "./workspace-control.ts";
 
@@ -35,12 +34,15 @@ export type ToolOptions = {
   registry?: string;
   /** Brings an archived workspace back; runs in the background by default. */
   restore?: (workspaceId: string) => void;
+  /** Whether auto-archive is on, asked at each add; by default from the saved settings and the store folder. */
+  autoArchive?: () => boolean;
 };
 
 export function pendingTools(dir: string, options: ToolOptions = {}): AgentToolDefinition[] {
   const home = options.home ?? paseoHome(process.env);
   const registry = options.registry ?? registryPath(process.env);
   const restore = options.restore ?? ((id: string) => startRestore(id, process.env));
+  const autoArchive = options.autoArchive ?? (() => autoArchiveFor(dir, {}));
   return [
     defineAgentTool({
       name: "pending_add",
@@ -58,8 +60,8 @@ export function pendingTools(dir: string, options: ToolOptions = {}): AgentToolD
           const item = addItem(dir, ws, c.agent.cwd, c.agent.id, input, new Date());
           let archived = false;
           try {
-            // Only new work waiting on the user brings an archived workspace back.
-            archived = input.kind === "waiting" && isArchived(loadState(home), ws);
+            // Only new work waiting on the user brings an archived workspace back, and only with auto-archive on.
+            archived = input.kind === "waiting" && autoArchive() && isArchived(loadState(home), ws);
           } catch {
             // the item is stored either way
           }
@@ -127,12 +129,16 @@ export function pendingTools(dir: string, options: ToolOptions = {}): AgentToolD
 type OpenRequest = { provider: string; tools: AgentToolDefinition[] };
 
 /**
- * The `agent.open.before` hook: a Claude tab gets the pending tools only once the cut-over
- * marker exists, checked at every open so the cut-over needs no restart.
+ * The `agent.open.before` hook: a Claude tab gets the pending tools only in mode "pending",
+ * checked at every open so switching the mode needs no restart.
  */
-export function pendingToolsHook(dir: string, tools: AgentToolDefinition[] = pendingTools(dir)) {
+export function pendingToolsHook(
+  dir: string,
+  tools: AgentToolDefinition[] = pendingTools(dir),
+  enabled: () => boolean = () => modeFor(dir, {}) === "pending",
+) {
   return async <R extends OpenRequest>({ request }: { request: R }): Promise<R | undefined> => {
-    if (request.provider !== "claude" || !existsSync(cutoverMarker(dir))) return undefined;
+    if (request.provider !== "claude" || !enabled()) return undefined;
     return { ...request, tools: [...request.tools, ...tools] };
   };
 }

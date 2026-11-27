@@ -1,21 +1,20 @@
 // Shared by the pending reminder and stop hooks: finds this agent's open pending items.
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { autoArchiveFor, modeFor, paseoHomeDir, pendingStoreDir, stateRoot as stateRootOf } from "../shared/install-state.mjs";
 
 function pendingDir() {
-  const state = process.env.XDG_STATE_HOME || join(process.env.HOME || homedir(), ".local", "state");
-  return join(state, "paseo-tabs", "pending");
+  return pendingStoreDir(process.env);
 }
 
-/** Open items (any kind) for PASEO_AGENT_ID, or [] when store mode is off or the id is unset. */
+/** Open items (any kind) for PASEO_AGENT_ID, or [] when mode "pending" is off or the id is unset. */
 export function openItemsForAgent() {
   const agentId = process.env.PASEO_AGENT_ID;
   if (!agentId) return [];
   const dir = pendingDir();
-  if (!existsSync(join(dir, "cutover"))) return [];
+  if (!storeOn()) return [];
   const found = [];
   for (const name of readdirSync(dir)) {
     if (!name.endsWith(".json")) continue;
@@ -32,11 +31,17 @@ export function openItemsForAgent() {
 }
 
 export function stateRoot() {
-  return process.env.XDG_STATE_HOME || join(process.env.HOME || homedir(), ".local", "state");
+  return stateRootOf(process.env);
 }
 
+/** True in mode "pending": the cut-over marker, the saved mode, or a fresh install. */
 export function storeOn() {
-  return existsSync(join(pendingDir(), "cutover"));
+  return modeFor(pendingDir(), undefined, process.env) === "pending";
+}
+
+/** True when the plugin's autoArchive setting is on (unsaved: on only after a 1.x cut-over). */
+export function autoArchiveOn() {
+  return autoArchiveFor(pendingDir(), undefined, process.env);
 }
 
 /** Every pending file in the store, parsed; a bad file is skipped. */
@@ -56,13 +61,9 @@ export function storeFiles() {
   return files;
 }
 
-function paseoHomeDir() {
-  return process.env.PASEO_HOME || join(process.env.HOME || homedir(), ".paseo");
-}
-
 /** The agent's workspace id from Paseo's agent records, or null. */
 export function agentWorkspace(agentId) {
-  const root = join(paseoHomeDir(), "agents");
+  const root = join(paseoHomeDir(process.env), "agents");
   let folders = [];
   try {
     folders = readdirSync(root);
@@ -85,7 +86,7 @@ export function agentWorkspace(agentId) {
 /** True when Paseo's workspace list shows this workspace archived. */
 export function workspaceArchived(workspaceId) {
   try {
-    const list = JSON.parse(readFileSync(join(paseoHomeDir(), "projects", "workspaces.json"), "utf8"));
+    const list = JSON.parse(readFileSync(join(paseoHomeDir(process.env), "projects", "workspaces.json"), "utf8"));
     const ws = Array.isArray(list) ? list.find((w) => w && w.workspaceId === workspaceId) : null;
     return !!(ws && ws.archivedAt);
   } catch {

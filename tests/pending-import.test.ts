@@ -22,14 +22,14 @@ const TABS = `# Review Focus · 1111111
 Something.
 
 **Waiting on you**
-- a) [ ] Pick a name (about 10 min) (OpenTodo task e0eed4e9-8790-48c2-ad99-1948e7cc306c)
+- a) [ ] Pick a name (about 10 min) (Tasks task e0eed4e9-8790-48c2-ad99-1948e7cc306c)
 - b) [ ] Reply to the thing
 
 **Claude's next steps**
 - c) [ ] Build it (about 3 min)
 
 **Done**
-- d) [x] ~~Old thing~~ (Jon did it)
+- d) [x] ~~Old thing~~ (done by hand)
 - z) [x] Finished plain
 \`\`\`
 - q) [ ] inside a fence
@@ -68,7 +68,7 @@ test("imports both tabs of a workspace with their letters", (t) => {
   ]);
   assert.equal(a[0].what, "Pick a name");
   assert.equal(a[0].minutes, 10);
-  assert.equal(a[0].opentodo, "e0eed4e9-8790-48c2-ad99-1948e7cc306c");
+  assert.equal(a[0].linkedTask, "e0eed4e9-8790-48c2-ad99-1948e7cc306c");
   assert.equal(a[1].minutes, 0);
   assert.equal(a[1].action, "");
   assert.equal(a[3].what, "Old thing");

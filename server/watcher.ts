@@ -40,6 +40,9 @@ export function syncAll(
   clock?: ItemClock,
   pendingDir?: string,
 ): Record<string, string> {
+  // A fresh install in mode "pending" has no TABS.md to keep: nothing is written, not even the item clock.
+  // The TABS.md view of the store is only for installs that came from 1.x, for a week after cut-over.
+  if (pendingDir !== undefined && storeMode(display, pendingDir) && !existsSync(cutoverMarker(pendingDir))) return {};
   const state = loadState(home);
   const overdueOf = clock
     ? (short: string, body: string) => clock.observe(short, body, now, display.overdueAfterDays)

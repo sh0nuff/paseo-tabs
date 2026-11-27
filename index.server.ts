@@ -7,13 +7,14 @@ import { ItemClock, clockPath } from "./server/item-clock.ts";
 import { paseoHome } from "./server/paseo-state.ts";
 import { pendingEnabledHandler, storeMode, pendingListHandler, pendingPickHandler, pendingSearchHandler, pendingUnpickHandler } from "./server/pending-rpc.ts";
 import { pendingDir } from "./server/pending-store.ts";
-import { pendingToolsHook } from "./server/pending-tools.ts";
+import { pendingTools, pendingToolsHook } from "./server/pending-tools.ts";
 import { DEFAULT_DISPLAY, type DisplayOptions } from "./server/tabs-file.ts";
 import { cachedFor, workspaceLines } from "./server/tabs-lines.ts";
 import { listTabs } from "./server/tabs-list.ts";
 import { storeLines, storeTabRows } from "./server/pending-lines.ts";
 import { type Watcher, startWatcher } from "./server/watcher.ts";
 import { displaySettings } from "./shared/settings.ts";
+import { autoArchiveFor, modeFor, savedSettings } from "./shared/install-state.mjs";
 import { pendingEnabled, pendingList, pendingPick, pendingSearch, pendingUnpick } from "./shared/pending-rpc.ts";
 import { pendingActivity } from "./shared/activity-rpc.ts";
 import { tabsLines, tabsList } from "./shared/tabs-rpc.ts";
@@ -21,13 +22,21 @@ import { tabsLines, tabsList } from "./shared/tabs-rpc.ts";
 export default function contribute(server: PluginServerContext) {
   const home = paseoHome(process.env);
   let display: DisplayOptions = DEFAULT_DISPLAY;
+  // Until Paseo hands over the saved settings, the file Paseo keeps them in is read directly.
+  let loaded = false;
+  // Only the switches that pick the mode are taken from it; the rest wait for Paseo's checked values.
+  const saved = (): DisplayOptions => {
+    if (loaded) return display;
+    const { mode, autoArchive, pendingStore } = savedSettings(process.env);
+    return { ...DEFAULT_DISPLAY, mode: mode === "pending" || mode === "tabs-md" ? mode : undefined, autoArchive, pendingStore };
+  };
   const clock = new ItemClock(clockPath(process.env, home));
   let watcher: Watcher | null = null;
   let stopped = false;
   // The first pass waits for the saved settings, so a file is never written
   // with the defaults and then again with the user's choice.
   const start = () => {
-    if (!stopped && !watcher) watcher = startWatcher(home, { display: () => display, clock, pendingDir: pendingDir(process.env) });
+    if (!stopped && !watcher) watcher = startWatcher(home, { display: saved, clock, pendingDir: pendingDir(process.env) });
   };
 
   const settings = server.registerSettings(displaySettings);
@@ -37,6 +46,7 @@ export default function contribute(server: PluginServerContext) {
       return;
     }
     display = state.values;
+    loaded = true;
     watcher?.refresh();
   };
   void settings.read().then(
@@ -51,10 +61,16 @@ export default function contribute(server: PluginServerContext) {
   );
   const unsubscribe = settings.subscribe(apply);
 
-  // The tools and the panel stay off until the cut-over marker exists.
-  server.addHook("agent.open.before", pendingToolsHook(pendingDir(process.env)));
+  const store = pendingDir(process.env);
+  // Mode "pending" (a fresh install, or a 1.x install after cut-over) turns on the tools and the panel;
+  // auto-archive is its own setting. Both are checked at use time, so a change needs no restart.
+  const pendingOn = () => storeMode(saved(), store);
+  const autoArchiveOn = () => autoArchiveFor(store, saved());
+  server.addHook(
+    "agent.open.before",
+    pendingToolsHook(store, pendingTools(store, { autoArchive: autoArchiveOn }), () => modeFor(store, saved()) === "pending"),
+  );
 
-  const pendingOn = () => storeMode(display, pendingDir(process.env));
   server.handle(tabsList, ({ workspaceId }) => ({
     tabs: pendingOn()
       ? storeTabRows(home, pendingDir(process.env), workspaceId, new Date(), display)
@@ -65,18 +81,18 @@ export default function contribute(server: PluginServerContext) {
     pendingOn() ? storeLines(home, pendingDir(process.env), new Date(), display) : workspaceLines(home, new Date(), display, clock),
   );
   server.handle(tabsLines, () => ({ lines: lines() }));
-  const store = pendingDir(process.env);
   server.handle(pendingList, ({ workspaceId }) => pendingListHandler(store, workspaceId));
   server.handle(pendingPick, ({ workspaceId, agentId, letter, done }) => pendingPickHandler(store, workspaceId, agentId, letter, new Date(), done === true));
   server.handle(pendingUnpick, ({ workspaceId, agentId, letter }) => pendingUnpickHandler(store, workspaceId, agentId, letter));
-  server.handle(pendingEnabled, () => pendingEnabledHandler(store));
+  server.handle(pendingEnabled, () => pendingEnabledHandler(store, saved()));
   server.handle(pendingSearch, ({ query }) => pendingSearchHandler(store, home, query));
   server.handle(pendingActivity, ({ agentId, draftLength }) => pendingActivityHandler(store, agentId, draftLength, new Date()));
 
-  // Archives finished, quiet workspaces every 5 minutes, for tabs whose Stop hook never loaded.
-  // PASEO_TABS_SWEEP_DRY_RUN=1 only logs what it would archive.
+  // With auto-archive on, archives finished, quiet workspaces every 5 minutes, for tabs whose
+  // Stop hook never loaded. PASEO_TABS_SWEEP_DRY_RUN=1 only logs what it would archive.
   const dryRun = process.env.PASEO_TABS_SWEEP_DRY_RUN === "1";
   const sweeper = startSweeper(async () => {
+    if (!autoArchiveOn() || !pendingOn()) return;
     const decisions = await sweep({ home, dir: store, registry: registryPath(process.env), runner: paseoRunner(process.env), now: new Date(), dryRun });
     for (const d of decisions) if (d.action !== "skip") console.log(`paseo-tabs sweep: ${decisionLine(d)}`);
   });

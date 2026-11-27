@@ -20,7 +20,7 @@
       "changed": "2026-11-22T10:00:00-05:00",
       "done": "2026-11-23T10:00:00-05:00",
       "note": null,
-      "opentodo": null
+      "linkedTask": null
     },
     {
       "letter": "b",
@@ -36,7 +36,7 @@
       "changed": "2026-11-25T10:00:00-05:00",
       "done": null,
       "note": null,
-      "opentodo": null
+      "linkedTask": null
     },
     {
       "letter": "c",
@@ -52,7 +52,7 @@
       "changed": "2026-11-26T08:00:00-05:00",
       "done": "2026-11-26T09:30:00-05:00",
       "note": null,
-      "opentodo": null
+      "linkedTask": null
     },
     {
       "letter": "d",
@@ -68,7 +68,7 @@
       "changed": "2026-11-26T09:00:00-05:00",
       "done": null,
       "note": null,
-      "opentodo": null
+      "linkedTask": null
     },
     {
       "letter": "a",
@@ -84,7 +84,7 @@
       "changed": "2026-11-26T08:00:00-05:00",
       "done": "2026-11-26T09:00:00-05:00",
       "note": null,
-      "opentodo": null
+      "linkedTask": null
     }
   ]
 }

@@ -18,7 +18,7 @@ const MIN = 60_000;
 const ago = (ms: number, from = NOW) => new Date(from.getTime() - ms);
 const WS = "wks_1111111aaaaaaa";
 const AGENT = "aaaaaaa1-full";
-const F = { kind: "waiting" as const, what: "Sign in to Plex", action: "a", minutes: 3, why: "w" };
+const F = { kind: "waiting" as const, what: "Sign in to the dashboard", action: "a", minutes: 3, why: "w" };
 
 type T = { after: (fn: () => void) => void };
 
@@ -29,8 +29,8 @@ function world(t: T, { now = NOW, pinned = false } = {}) {
   const dir = join(state, "paseo-tabs", "pending");
   mkdirSync(dir, { recursive: true });
   const home = makeHome(root);
-  writeWorkspaces(home, [{ workspaceId: WS, cwd: "/work/one", title: "Phone notes app", pinnedAt: pinned ? "2026-11-01T00:00:00.000Z" : null }]);
-  writeAgent(home, { id: AGENT, cwd: "/work/one", workspaceId: WS, title: "ZenNotes trial", updatedAt: ago(60 * MIN, now).toISOString() });
+  writeWorkspaces(home, [{ workspaceId: WS, cwd: "/work/one", title: "Billing service", pinnedAt: pinned ? "2026-11-01T00:00:00.000Z" : null }]);
+  writeAgent(home, { id: AGENT, cwd: "/work/one", workspaceId: WS, title: "Retry bug", updatedAt: ago(60 * MIN, now).toISOString() });
   return { root, state, dir, home, registry: join(state, "paseo-tabs", "archived-tabs.json") };
 }
 
@@ -64,8 +64,8 @@ test("sweep archives a finished, quiet, idle workspace and records its tabs", as
   closedItem(w);
   const r = await run(w);
   assert.deepEqual(r.archived, [WS]);
-  assert.deepEqual(r.decisions, [{ workspaceId: WS, name: "Phone notes app", action: "archive", reason: "archived" }]);
-  assert.deepEqual(readRegistry(w.registry, NOW).map((e) => [e.agentId, e.workspaceName]), [[AGENT, "Phone notes app"]]);
+  assert.deepEqual(r.decisions, [{ workspaceId: WS, name: "Billing service", action: "archive", reason: "archived" }]);
+  assert.deepEqual(readRegistry(w.registry, NOW).map((e) => [e.agentId, e.workspaceName]), [[AGENT, "Billing service"]]);
 });
 
 test("sweep leaves a workspace with an open item", async (t) => {
@@ -164,7 +164,7 @@ test("a dry run reports what it would archive and archives and records nothing",
   closedItem(w);
   const r = await run(w, { [AGENT]: "idle" }, true);
   assert.deepEqual(r.archived, []);
-  assert.deepEqual(r.decisions, [{ workspaceId: WS, name: "Phone notes app", action: "archive", reason: "would archive (dry run)" }]);
+  assert.deepEqual(r.decisions, [{ workspaceId: WS, name: "Billing service", action: "archive", reason: "would archive (dry run)" }]);
   assert.equal(existsSync(w.registry), false);
 });
 
@@ -173,7 +173,7 @@ test("pending.ts sweep --dry-run prints every live workspace's decision and neve
   const w = world(t, { now });
   closedItem(w, ago(60 * MIN, now));
   writeWorkspaces(w.home, [
-    { workspaceId: WS, cwd: "/work/one", title: "Phone notes app" },
+    { workspaceId: WS, cwd: "/work/one", title: "Billing service" },
     { workspaceId: "wks_2222222bbbbbbb", cwd: "/work/two", title: "Second" },
     { workspaceId: "wks_3333333ccccccc", cwd: "/work/three", title: "Gone", archivedAt: "2026-11-01T00:00:00.000Z" },
   ]);
@@ -185,7 +185,7 @@ test("pending.ts sweep --dry-run prints every live workspace's decision and neve
   const env = { PATH: `${bin}:${process.env.PATH ?? ""}`, HOME: join(w.root, "nohome"), XDG_STATE_HOME: w.state, PASEO_HOME: w.home };
   const r = spawnSync(process.execPath, [PENDING, "sweep", "--dry-run"], { env, encoding: "utf8", timeout: 20_000 });
   assert.equal(r.status, 0, r.stderr);
-  assert.deepEqual(r.stdout.trim().split("\n"), [`archive  ${WS} "Phone notes app"`, `skip: never had items  wks_2222222bbbbbbb "Second"`]);
+  assert.deepEqual(r.stdout.trim().split("\n"), [`archive  ${WS} "Billing service"`, `skip: never had items  wks_2222222bbbbbbb "Second"`]);
   assert.deepEqual(readFileSync(log, "utf8").trim().split("\n"), [`paseo agent inspect ${AGENT} --json`]);
   assert.equal(existsSync(w.registry), false);
   const refused = spawnSync(process.execPath, [PENDING, "sweep"], { env, encoding: "utf8", timeout: 20_000 });

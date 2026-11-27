@@ -4,7 +4,8 @@
 //   node tools/pending-import.ts <TABS.md path> --write   merge into the store (a re-run adds nothing)
 //   options: --dir <store dir>  --home <Paseo home>
 //
-// Items keep their letters, so OpenTodo subtasks stay linked. Created and changed
+// Items keep their letters, and a "(<App> task <id>)" ending is kept as the item's linkedTask,
+// so tools that linked items to tasks elsewhere stay linked. Created and changed
 // times are the import time: the TABS.md item clock is not carried over.
 
 import { readFileSync } from "node:fs";
@@ -17,16 +18,16 @@ import { GROUP_LINE, TAB_HEADING, hiddenLines, shortAgentId, shortWorkspaceId, s
 const LABEL = /^\*\*(.+)\*\*\s*$/;
 const ITEM = /^\s*[-*+]\s+([a-z]+)\)\s+\[([ xX])\]\s*(.*)$/;
 const MINUTES = /\s*\(about (\d+) min\)\s*$/;
-const TODO = /\s*\(OpenTodo task ([0-9a-f-]{8,})\)\s*$/i;
+const TODO = /\s*\([A-Za-z][\w-]* task ([0-9a-f-]{8,})\)\s*$/i;
 
 export type WorkspaceCount = { cwd: string; waiting: number; next: number; done: number; unmatched: number };
 
-function parseItem(rest: string): { what: string; minutes: number; opentodo: string | null; struck: boolean } {
+function parseItem(rest: string): { what: string; minutes: number; linkedTask: string | null; struck: boolean } {
   let what = rest.trim();
-  let opentodo: string | null = null;
+  let linkedTask: string | null = null;
   const todo = TODO.exec(what);
   if (todo) {
-    opentodo = todo[1];
+    linkedTask = todo[1];
     what = what.slice(0, todo.index).trim();
   }
   let minutes = 0;
@@ -37,7 +38,7 @@ function parseItem(rest: string): { what: string; minutes: number; opentodo: str
   }
   const struck = /^~~(.*?)~~(?:\s.*)?$/s.exec(what);
   if (struck) what = struck[1].trim();
-  return { what, minutes, opentodo, struck: !!struck };
+  return { what, minutes, linkedTask, struck: !!struck };
 }
 
 export function analyzeTabs(text: string, state: PaseoState, now: Date): { files: PendingFile[]; counts: Map<string, WorkspaceCount> } {
@@ -90,7 +91,7 @@ export function analyzeTabs(text: string, state: PaseoState, now: Date): { files
       const item: PendingItem = {
         letter: m[1], agentId: agent.id, kind, what: p.what, action: "", minutes: p.minutes, why: "",
         status: ticked ? "done" : "open", picked: false, created: stamp, changed: stamp,
-        done: ticked ? stamp : null, note: null, opentodo: p.opentodo,
+        done: ticked ? stamp : null, note: null, linkedTask: p.linkedTask,
       };
       if (file.items.some((x) => x.agentId === agent.id && x.letter === item.letter)) return;
       file.items.push(item);

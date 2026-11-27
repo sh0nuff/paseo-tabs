@@ -1,7 +1,14 @@
 import { defineSettings } from "@getpaseo/plugin";
 import { z } from "zod";
 
-/** How TABS.md and the panel show the tabs. Shown under Settings, Plugins, Tabs. */
+/**
+ * The plugin's settings, shown under Settings, Plugins, Tabs.
+ *
+ * `mode` and `autoArchive` are optional on purpose: left unsaved, the plugin works them out
+ * from what is on disk (see shared/install-state.mjs), so an upgrade from 1.x keeps its
+ * behaviour and a fresh install gets the Pending panel. `pendingStore` is the 1.x-era switch,
+ * still honoured when `mode` was never saved.
+ */
 export const displaySettings = defineSettings({
   id: "display",
   scope: "host",
@@ -15,6 +22,8 @@ export const displaySettings = defineSettings({
     workspaceOrder: z.enum(["newest", "latestMessage"]).default("newest"),
     removeFinished: z.boolean().default(true),
     pendingStore: z.boolean().default(false),
+    mode: z.enum(["pending", "tabs-md"]).optional(),
+    autoArchive: z.boolean().optional(),
   }),
 });
 
