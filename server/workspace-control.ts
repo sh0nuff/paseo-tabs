@@ -92,7 +92,16 @@ export function paseoRunner(env: Record<string, string | undefined> = process.en
   };
 }
 
-const CONTROL_CLI = join(dirname(fileURLToPath(import.meta.url)), "..", "tools", "workspace-control.ts");
+// The daemon loads the server half as a bundle, where import.meta.url is undefined, so
+// the path is worked out when needed and falls back to the checkout the daemon loads.
+function controlCli(env: Record<string, string | undefined> = process.env): string {
+  try {
+    if (typeof import.meta.url === "string") return join(dirname(fileURLToPath(import.meta.url)), "..", "tools", "workspace-control.ts");
+  } catch {
+    // fall through
+  }
+  return join(env.HOME ?? "", "git", "paseo-tabs", "tools", "workspace-control.ts");
+}
 
 /** The command that runs tools/workspace-control.ts, or $PASEO_TABS_CONTROL (a JSON array) when set. */
 export function controlCommand(env: Record<string, string | undefined> = process.env): string[] {
@@ -100,7 +109,7 @@ export function controlCommand(env: Record<string, string | undefined> = process
     const parsed = JSON.parse(env.PASEO_TABS_CONTROL);
     if (Array.isArray(parsed) && parsed.length > 0 && parsed.every((p) => typeof p === "string")) return parsed;
   }
-  return [process.execPath, CONTROL_CLI];
+  return [process.execPath, controlCli(env)];
 }
 
 /** Runs `workspace-control restore <id>` and waits at most timeoutMs. Never throws; returns its one-line report. */
