@@ -8,8 +8,8 @@ import { join } from "node:path";
 import { allFiles, clearPicked, readPending, setPicked, type PendingItem } from "./pending-store.ts";
 
 function toCard(item: PendingItem): PendingCard {
-  const { agentId, letter, what, action, minutes, why, picked, status } = item;
-  return { agentId, letter, what, action, minutes, why, picked, status };
+  const { agentId, letter, what, action, minutes, why, picked, status, created } = item;
+  return { agentId, letter, what, action, minutes, why, created, picked, status };
 }
 
 function sentence(text: string, fallback: string): string {

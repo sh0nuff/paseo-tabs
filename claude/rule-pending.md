@@ -6,6 +6,8 @@ Every ask for the user is said in full in the message itself, in words, with wha
 
 Keep the list current without being asked. Use `pending_update` when an item changes. Use `pending_done` with status `done` or `dropped` and a short note when it ends. `pending_list` shows your open items. Never refer to an item by its letter alone. Always say its words.
 
+After you do anything, and above all when you end a turn with nothing waiting on the user, reconcile your list. Close with `pending_done` every item that is done or stale, drop every item a plan replaced, and add the new ones. An empty waiting list is a valid end state. The moment evidence appears (a command printed its success line, a log shows the step, the user says they did it), close the matching item in that same turn. Never add an item for something you can check yourself.
+
 A message starting `Picked from the panel:` means the user chose that item. Restate it (what it is, the action, about N min) and start on it together.
 
 When the item is done, mark it with `pending_done` and say in one line what finished. Then offer the remaining waiting items as a pick-one question with the recommended one first, so the next one starts the same way.

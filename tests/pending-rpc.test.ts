@@ -11,7 +11,7 @@ const later = (m: number) => new Date(T0.getTime() + m * 60000);
 const W = { kind: "waiting" as const, what: "Install the Jellyfin app on the TV", action: "Open Play Store on the TV, search Jellyfin, sign in", minutes: 5, why: "The TV can't play the new library without it" };
 
 test("pickMessage uses the exact format and fallbacks", () => {
-  const card = { agentId: "A", letter: "c", what: W.what, action: W.action, minutes: 5, why: W.why, picked: false, status: "open" as const };
+  const card = { agentId: "A", letter: "c", what: W.what, action: W.action, minutes: 5, why: W.why, created: "2026-11-26T12:00:00+00:00", picked: false, status: "open" as const };
   assert.equal(
     pickMessage(card),
     "Picked from the panel: Install the Jellyfin app on the TV. Action: Open Play Store on the TV, search Jellyfin, sign in. About 5 min. Why: The TV can't play the new library without it. (item c)",
@@ -76,4 +76,11 @@ test("storeMode is on for the setting or the marker, off for neither", (t) => {
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "cutover"), "");
   assert.equal(storeMode({ pendingStore: false }, dir), true);
+});
+
+test("list cards carry created", (t) => {
+  const dir = tempDir(t);
+  addItem(dir, "w", "/c", "A", W, T0);
+  const [card] = pendingListHandler(dir, "w").items;
+  assert.equal(Date.parse(card.created), T0.getTime());
 });

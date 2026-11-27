@@ -8,6 +8,7 @@ export const pendingCard = z.object({
   action: z.string(),
   minutes: z.number(),
   why: z.string(),
+  created: z.string(),
   picked: z.boolean(),
   status: z.enum(["open", "done", "dropped"]),
 });

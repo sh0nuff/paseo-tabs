@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { type PendingCard, pendingEnabled, pendingList, pendingPick, pendingSearch, pendingUnpick } from "../shared/pending-rpc.ts";
+import { waitingLabel } from "./pending-age.ts";
 import { sendPicked } from "./pending-send.ts";
 
 export function PendingPanel({ theme, layout, workspaceId, navigation }: PluginWorkspacePanelProps) {
@@ -187,6 +188,7 @@ export function PendingPanel({ theme, layout, workspaceId, navigation }: PluginW
               <Text style={styles.what}>{card.what}</Text>
               <Text style={styles.line}>{`Action: ${card.action || "ask the tab"}`}</Text>
               <Text style={styles.line}>{`About ${card.minutes} min`}</Text>
+              <Text style={styles.line}>{waitingLabel(card.created, new Date())}</Text>
               {card.why ? <Text style={styles.line}>{`Why: ${card.why}`}</Text> : null}
               {card.picked && !waiting ? <Text style={styles.state}>In progress</Text> : null}
               {waiting ? <Text style={styles.state}>Sent when the tab finishes</Text> : null}
