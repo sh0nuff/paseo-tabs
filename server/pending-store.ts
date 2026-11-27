@@ -267,16 +267,14 @@ export function reopenItem(dir: string, ws: string, agentId: string, letter: str
 }
 
 /**
- * Marks one item picked and clears the others. An item already picked is refused, so two
- * devices picking at once send only once. A pick is not a change to the item, so `changed`
- * (which drives the overdue dot) is left alone. `allowPicked` lets the done message go out for
- * an item picked earlier.
+ * Marks one item picked and clears the others. Picking an item already picked is allowed, so
+ * a card picked earlier can be clicked again. A pick is not a change to the item, so `changed`
+ * (which drives the overdue dot) is left alone.
  */
-export function setPicked(dir: string, ws: string, agentId: string, letter: string, _now: Date, allowPicked = false): PendingItem {
+export function setPicked(dir: string, ws: string, agentId: string, letter: string, _now: Date): PendingItem {
   return mutate(dir, ws, (file) => {
     const item = find(file, agentId, letter);
     if (item.status !== "open") throw new Error(`Item ${letter} is ${item.status}; only an open item can be picked`);
-    if (item.picked && !allowPicked) throw new Error(`Item ${letter} is already picked`);
     for (const other of file.items) other.picked = false;
     item.picked = true;
     return item;

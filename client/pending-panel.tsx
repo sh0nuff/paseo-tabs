@@ -1,6 +1,6 @@
 import { type PluginWorkspacePanelProps, usePaseo, useRpc } from "@getpaseo/plugin/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { type PendingCard, pendingEnabled, pendingList, pendingPick, pendingSearch, pendingUnpick } from "../shared/pending-rpc.ts";
 import { waitingLabel } from "./pending-age.ts";
@@ -17,7 +17,12 @@ export function PendingPanel({ theme, layout, workspaceId, navigation }: PluginW
   // "waiting": send queued for the tab. "sent": the message went out.
   const [queued, setQueued] = useState<Record<string, "waiting" | "sent" | undefined>>({});
   const [doneTicked, setDoneTicked] = useState<Record<string, boolean | undefined>>({});
-  const [failure, setFailure] = useState<string | null>(null);
+  const [failure, setFailureState] = useState<{ text: string; key: string | null } | null>(null);
+  const setFailure = (error: unknown, key: string | null) => {
+    const raw = error instanceof Error ? error.message : String(error);
+    const message = raw.replace(/\s*requestType=.*$/s, "").trim();
+    setFailureState({ text: `Couldn't send: ${message}`, key });
+  };
   const [text, setText] = useState("");
   const term = text.trim();
 
@@ -34,6 +39,17 @@ export function PendingPanel({ theme, layout, workspaceId, navigation }: PluginW
     refetchInterval: 5000,
     enabled: on,
   });
+  // The failure text clears after 30 seconds, and once a refresh shows its card gone or no longer picked.
+  useEffect(() => {
+    if (!failure) return;
+    const timer = setTimeout(() => setFailureState(null), 30_000);
+    return () => clearTimeout(timer);
+  }, [failure]);
+  useEffect(() => {
+    if (!failure?.key || !query.data) return;
+    const card = query.data.items.find((c) => cardKey(c) === failure.key);
+    if (!card || !card.picked) setFailureState(null);
+  }, [query.data, failure]);
   const hits = useQuery({
     queryKey: ["paseo-pending-search", term],
     queryFn: () => search({ query: term }),
@@ -89,7 +105,7 @@ export function PendingPanel({ theme, layout, workspaceId, navigation }: PluginW
     // Only a send already queued from this panel stops a second press. A card picked earlier
     // is left to the server, which refuses a pick that still stands.
     if (queued[cardKey(card)] === "waiting") return;
-    setFailure(null);
+    setFailureState(null);
     try {
       // The RPC marks the item picked and returns the message; sending comes after.
       const { message } = await pick({ workspaceId, agentId: card.agentId, letter: card.letter, ...(doneTicked[cardKey(card)] ? { done: true } : {}) });
@@ -111,12 +127,12 @@ export function PendingPanel({ theme, layout, workspaceId, navigation }: PluginW
       sender.done
         .then(() => setQueued((q) => ({ ...q, [cardKey(card)]: q[cardKey(card)] === "waiting" ? "sent" : q[cardKey(card)] })))
         .catch((error: unknown) => {
-          setFailure(error instanceof Error ? error.message : String(error));
+          setFailure(error, cardKey(card));
           setQueued((q) => ({ ...q, [cardKey(card)]: undefined }));
           void queryClient.invalidateQueries({ queryKey: ["paseo-pending", workspaceId] });
         });
     } catch (error) {
-      setFailure(error instanceof Error ? error.message : String(error));
+      setFailure(error, cardKey(card));
     }
   };
 
@@ -172,7 +188,7 @@ export function PendingPanel({ theme, layout, workspaceId, navigation }: PluginW
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Text style={styles.header}>{`Waiting on you · ${items.length}`}</Text>
-      {failure ? <Text style={styles.error}>{failure}</Text> : null}
+      {failure ? <Text style={styles.error}>{failure.text}</Text> : null}
       {items.length === 0 ? <Text style={styles.message}>No pending items</Text> : null}
       {items.map((card) => {
         const waiting = queued[cardKey(card)] === "waiting";

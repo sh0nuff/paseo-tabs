@@ -59,11 +59,11 @@ test("search finds items across workspaces with names, blank query finds none", 
   assert.deepEqual(pendingSearchHandler(dir, home, "  ").hits, []);
 });
 
-test("a second pick of the same item is refused until unpick clears it", (t) => {
+test("a second pick of the same item succeeds and keeps it picked; unpick clears it", (t) => {
   const dir = tempDir(t);
   addItem(dir, "w", "/c", "A", W, T0);
   pendingPickHandler(dir, "w", "A", "a", T0);
-  assert.throws(() => pendingPickHandler(dir, "w", "A", "a", T0), /already picked/);
+  assert.match(pendingPickHandler(dir, "w", "A", "a", T0).message, /\(item a\)$/);
   assert.deepEqual(pendingUnpickHandler(dir, "w", "A", "a"), { ok: true });
   assert.deepEqual(pendingListHandler(dir, "w").items.map((i) => i.picked), [false]);
   assert.match(pendingPickHandler(dir, "w", "A", "a", T0).message, /\(item a\)$/);
@@ -94,11 +94,12 @@ test("list cards carry created", (t) => {
   assert.equal(Date.parse(card.created), T0.getTime());
 });
 
-test("done on an already picked item returns the done message and keeps it picked; a plain re-pick is refused", (t) => {
+test("done on an already picked item returns the done message and keeps it picked; a plain re-pick works", (t) => {
   const dir = tempDir(t);
   addItem(dir, "w", "/c", "A", W, T0);
   pendingPickHandler(dir, "w", "A", "a", T0);
   assert.match(pendingPickHandler(dir, "w", "A", "a", T0, true).message, /^Done from the panel: .*\(item a\)$/);
   assert.equal(pendingListHandler(dir, "w").items[0].picked, true);
-  assert.throws(() => pendingPickHandler(dir, "w", "A", "a", T0), /already picked/);
+  assert.match(pendingPickHandler(dir, "w", "A", "a", T0).message, /\(item a\)$/);
+  assert.equal(pendingListHandler(dir, "w").items[0].picked, true);
 });

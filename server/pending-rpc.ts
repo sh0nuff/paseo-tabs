@@ -43,7 +43,7 @@ export function pendingListHandler(dir: string, workspaceId: string): { items: P
 }
 
 export function pendingPickHandler(dir: string, workspaceId: string, agentId: string, letter: string, now: Date, done = false): { message: string } {
-  const item = setPicked(dir, workspaceId, agentId, letter, now, done);
+  const item = setPicked(dir, workspaceId, agentId, letter, now);
   return { message: done ? doneMessage(toCard(item)) : pickMessage(toCard(item)) };
 }
 

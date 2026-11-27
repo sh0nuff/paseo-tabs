@@ -149,15 +149,22 @@ test("a stale lock is stolen, and release leaves another holder's lock alone", (
   assert.equal(existsSync(lock), false);
 });
 
-test("setPicked refuses an item already picked, and clearPicked lets it be picked again", (t) => {
+test("setPicked allows an item already picked, and clearPicked lets it be picked again", (t) => {
   const dir = tempDir(t);
   addItem(dir, "w", "/c", "A", F, NOW);
   setPicked(dir, "w", "A", "a", NOW);
-  assert.throws(() => setPicked(dir, "w", "A", "a", NOW), /Item a is already picked/);
+  assert.equal(setPicked(dir, "w", "A", "a", NOW).picked, true);
   assert.equal(clearPicked(dir, "w", "A", "a").picked, false);
   assert.equal(readPending(dir, "w").items[0].picked, false);
   assert.equal(setPicked(dir, "w", "A", "a", NOW).picked, true);
   assert.throws(() => clearPicked(dir, "w", "A", "z"), /No item z/);
+});
+
+test("setPicked refuses an item that is not open", (t) => {
+  const dir = tempDir(t);
+  addItem(dir, "w", "/c", "A", F, NOW);
+  finishItem(dir, "w", "A", "a", "done", null, NOW);
+  assert.throws(() => setPicked(dir, "w", "A", "a", NOW), /only an open item can be picked/);
 });
 
 test("setPicked leaves changed alone", (t) => {
