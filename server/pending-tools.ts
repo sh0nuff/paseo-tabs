@@ -58,7 +58,8 @@ export function pendingTools(dir: string, options: ToolOptions = {}): AgentToolD
           const item = addItem(dir, ws, c.agent.cwd, c.agent.id, input, new Date());
           let archived = false;
           try {
-            archived = isArchived(loadState(home), ws);
+            // Only new work waiting on the user brings an archived workspace back.
+            archived = input.kind === "waiting" && isArchived(loadState(home), ws);
           } catch {
             // the item is stored either way
           }
@@ -109,7 +110,7 @@ export function pendingTools(dir: string, options: ToolOptions = {}): AgentToolD
     defineAgentTool({
       name: "pending_find",
       description:
-        "Find other tabs to hand work to: live ones, and ones whose workspace was archived when nothing was left waiting (kept 30 days). Matches every word against the workspace name and tab title, or as the start of an agent or workspace id. One JSON line per tab. Then message the tab with send_agent_prompt; an archived workspace comes back by itself.",
+        "Find other tabs to hand work to: live ones, and ones whose workspace was archived when nothing was left waiting (kept 30 days). Matches every word against the workspace name and tab title, or as the start of an agent or workspace id. One JSON line per tab. Then message the tab with send_agent_prompt (an archived tab runs, its workspace stays archived), or add an item waiting on the user for it, which brings its workspace back.",
       input: z.object({ query: z.string().describe("Words from the workspace name or tab title, or an id prefix; empty lists all") }),
       execute: ({ query }) => {
         try {

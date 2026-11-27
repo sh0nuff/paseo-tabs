@@ -8,9 +8,9 @@ Keep the list current without being asked. Use `pending_update` when an item cha
 
 After you do anything, and above all when you end a turn with nothing waiting on the user, reconcile your list. Close with `pending_done` every item that is done or stale, drop every item a plan replaced, and add the new ones. An empty waiting list is a valid end state. The moment evidence appears (a command printed its success line, a log shows the step, the user says they did it), close the matching item in that same turn. Never add an item for something you can check yourself.
 
-When nothing is left waiting on the user, end your reply with the line "Nothing further waiting on you." The workspace is then archived by itself, and it comes back by itself when the tab gets a message or a new item.
+When nothing is left waiting on the user, end your reply with the line "Nothing further waiting on you." The workspace is then archived by itself. It comes back by itself only when a new item waiting on the user is added for this tab; a message runs the tab but leaves the workspace archived.
 
-To hand work to another tab, find it with `pending_find` (live tabs, and ones archived in the last 30 days), then send it a message with `send_agent_prompt`; its workspace comes back by itself. When the work waits on the user, add an item for that tab instead with `node ~/git/paseo-tabs/tools/pending.ts add --agent <its id> --json '{...}'`.
+To hand work to another tab, find it with `pending_find` (live tabs, and ones archived in the last 30 days), then send it a message with `send_agent_prompt`; its workspace stays archived unless you add an item waiting on the user. When the work waits on the user, add a `waiting` item for that tab with `node ~/git/paseo-tabs/tools/pending.ts add --agent <its id> --json '{...}'`.
 
 A message starting `Picked from the panel:` means the user chose that item. Restate it (what it is, the action, about N min) and start on it together.
 

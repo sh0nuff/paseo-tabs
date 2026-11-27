@@ -277,29 +277,36 @@ test("the auto-archive CLI checks the status through paseo and archives through 
 
 // Coming back
 
-test("the reminder restores this tab's archived workspace, and leaves a live one alone", (t) => {
+test("the reminder never restores an archived workspace", (t) => {
   const w = world(t, { archived: true });
   assert.equal(hook(REMINDER, w.env, AGENT, {}).status, 0);
-  assert.deepEqual(w.calls(), [`control restore ${WS}`]);
-  const live = world(t);
-  hook(REMINDER, live.env, AGENT, {});
-  assert.deepEqual(live.calls(), []);
-  const off = world(t, { archived: true, marker: false });
-  hook(REMINDER, off.env, AGENT, {});
-  assert.deepEqual(off.calls(), []);
+  assert.deepEqual(w.calls(), []);
 });
 
-test("adding an item for an archived tab restores its workspace, from the CLI and the tool", async (t) => {
+test("stop hook schedules nothing when the workspace is already archived", (t) => {
   const w = world(t, { archived: true });
+  closedItem(w);
+  assert.equal(hook(STOP, w.env, AGENT, { transcript_path: transcript(w.root, "x") }).stdout, "");
+  assert.equal(hook(STOP, w.env, AGENT, { transcript_path: transcript(w.root, LINE), stop_hook_active: true }).stdout, "");
+  assert.deepEqual(w.calls(), []);
+});
+
+test("adding a waiting item for an archived tab restores its workspace, a next item does not", async (t) => {
+  const w = world(t, { archived: true });
+  const next = spawnSync(process.execPath, [PENDING, "add", "--agent", AGENT, "--json", JSON.stringify({ ...F, kind: "next" }), "--dir", w.dir, "--home", w.home], { env: w.env, encoding: "utf8" });
+  assert.equal(next.status, 0, next.stderr);
+  assert.deepEqual(w.calls(), []);
   const r = spawnSync(process.execPath, [PENDING, "add", "--agent", AGENT, "--json", JSON.stringify(F), "--dir", w.dir, "--home", w.home], { env: w.env, encoding: "utf8" });
   assert.equal(r.status, 0, r.stderr);
-  assert.equal(JSON.parse(r.stdout).letter, "a");
+  assert.equal(JSON.parse(r.stdout).letter, "b");
   assert.deepEqual(w.calls(), [`control restore ${WS}`]);
 
   const restored: string[] = [];
   const tool = pendingTools(w.dir, { home: w.home, registry: w.registry, restore: (id) => void restored.push(id) }).find((x) => x.name === "pending_add") as AgentToolDefinition;
   const exec = (tool as never as { execute: (i: unknown, c: unknown) => Promise<{ text: string }> }).execute;
   const ctx = (ws: string) => ({ agent: { id: AGENT, workspaceId: ws, cwd: "/c" }, signal: new AbortController().signal });
+  assert.doesNotMatch((await exec({ ...F, kind: "next" }, ctx(WS))).text, /restored/);
+  assert.deepEqual(restored, []);
   const out = await exec(F, ctx(WS));
   assert.match(out.text, /being restored/);
   await exec(F, ctx("wks_live_elsewhere"));

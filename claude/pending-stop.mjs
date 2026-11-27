@@ -6,13 +6,14 @@
 //    time this ran, the workspace is archived: first the tab is asked once to end with
 //    "Nothing further waiting on you.", then an archive is scheduled 90 s out, so the
 //    final message reaches the user first. The scheduled run checks everything again.
+//    Skipped when the workspace is already archived (a message ran the tab there).
 //
 // Never fails: any error means no output.
 
 import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { PENDING_CLI, openItemsForAgent, stateRoot, storeFiles, storeOn } from "./pending-lib.mjs";
+import { PENDING_CLI, agentWorkspace, openItemsForAgent, stateRoot, storeFiles, storeOn, workspaceArchived } from "./pending-lib.mjs";
 
 const LINE = "Nothing further waiting on you";
 const DELAY_S = 90;
@@ -108,6 +109,8 @@ function autoArchive(input, turn) {
   if (!latest) return null;
   const stamp = new Date(latest).toISOString();
   if (lastHandled(agentId) === stamp) return null; // nothing closed since the last archive
+  const ws = agentWorkspace(agentId);
+  if (ws && workspaceArchived(ws)) return null; // a message ran this tab while archived: it stays archived
   const said = lastAssistantText(input, turn).toLowerCase().includes(LINE.toLowerCase());
   if (input.stop_hook_active !== true && !said) {
     return "All pending items are closed. End your reply with the line: Nothing further waiting on you. This workspace is then archived automatically.";

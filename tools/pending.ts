@@ -8,7 +8,7 @@
 //
 // Without --workspace, the agent's workspace comes from Paseo's own records (--home, else
 // $PASEO_HOME or ~/.paseo), and `add` takes that workspace's folder as its --cwd.
-// `add` for an agent whose workspace is archived restores the workspace first.
+// `add` of a `waiting` item for an agent whose workspace is archived restores the workspace.
 // Prints the item (or the list) as JSON. On error prints the message, exit 1.
 
 import { parseArgs } from "node:util";
@@ -72,8 +72,8 @@ async function main(): Promise<void> {
   switch (command) {
     case "add":
       out = addItem(dir, ws, cwd ?? "", need("agent"), fields, now);
-      // The tab it is for comes back by itself when its workspace was archived.
-      if (isArchived(loadState(home), ws)) process.stderr.write(`${runRestore(ws, process.env)}\n`);
+      // New work waiting on the user brings an archived workspace back; a `next` item does not.
+      if (fields.kind === "waiting" && isArchived(loadState(home), ws)) process.stderr.write(`${runRestore(ws, process.env)}\n`);
       break;
     case "update":
       out = updateItem(dir, ws, need("agent"), need("letter"), fields, now);
