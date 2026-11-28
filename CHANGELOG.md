@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.1
+
+- Fix: the plugin failed to load because node-only helpers sat in `shared/`, which Paseo bundles for the app. They now live in `server/`.
+
 ## 2.1.0
 
 The Paseo plugin alone now works with any agent provider.
