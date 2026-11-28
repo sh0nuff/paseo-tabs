@@ -6,7 +6,7 @@ import { z } from "zod";
  * ask per workspace across all devices, and only in Pending panel mode; the caller opens the panel then.
  */
 export const panelOpenClaim = defineRpc({
-  name: "pending.panelOpenClaim",
+  name: "pending.panel-open-claim",
   input: z.object({ workspaceId: z.string() }),
   output: z.object({ claimed: z.boolean() }),
 });
