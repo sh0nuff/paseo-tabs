@@ -7,7 +7,7 @@ The Paseo plugin alone now works with any agent provider.
 ### Changed
 
 - The pending tools are attached to every tab, not only Claude ones. A provider that cannot take tools goes without them and the session still opens.
-- The rule is appended to every tab's system prompt by the Paseo plugin. Its text now lives in one place, `shared/rules.mjs`, which the Claude Code SessionStart hook also reads (`claude/rule.md` and `claude/rule-pending.md` are gone). The hook prints nothing when the Paseo plugin already supplied the rule (`PASEO_TABS_RULE_APPENDED=1`).
+- The rule is appended to every tab's system prompt by the Paseo plugin. Its text now lives in one place, `lib/rules.mjs`, which the Claude Code SessionStart hook also reads (`claude/rule.md` and `claude/rule-pending.md` are gone). The hook prints nothing when the Paseo plugin already supplied the rule (`PASEO_TABS_RULE_APPENDED=1`).
 - The Claude Code plugin is optional: it adds the per-message reminder and the end-of-turn check.
 
 ### Added

@@ -3,7 +3,7 @@
 
 import { z } from "zod";
 import { defineAgentTool, type AgentToolContext, type AgentToolDefinition, type AgentToolResult } from "@getpaseo/plugin/server";
-import { autoArchiveFor, modeFor } from "../shared/install-state.mjs";
+import { autoArchiveFor, modeFor } from "../lib/install-state.mjs";
 import { registryPath } from "./archived-tabs.ts";
 import { findTabs, isArchived } from "./auto-archive.ts";
 import { loadState, paseoHome } from "./paseo-state.ts";

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import { ruleHook } from "../server/rule-hook.ts";
-import { buildRule, RULE_APPENDED_ENV } from "../shared/rules.mjs";
+import { buildRule, RULE_APPENDED_ENV } from "../lib/rules.mjs";
 import { gitInit, tempDir } from "./helpers.ts";
 
 type Request = { agentId: string; cwd: string; provider: string; purpose: "interactive" | "history"; appendSystemPrompt?: string[]; env: Record<string, string> };

@@ -5,7 +5,7 @@ import { z } from "zod";
  * The plugin's settings, shown under Settings, Plugins, Tabs.
  *
  * `mode` and `autoArchive` are optional on purpose: left unsaved, the plugin works them out
- * from what is on disk (see shared/install-state.mjs), so an upgrade from 1.x keeps its
+ * from what is on disk (see lib/install-state.mjs), so an upgrade from 1.x keeps its
  * behaviour and a fresh install gets the Pending panel. `pendingStore` is the 1.x-era switch,
  * still honoured when `mode` was never saved.
  */

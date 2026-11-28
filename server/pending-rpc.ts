@@ -3,7 +3,7 @@
 
 import type { PendingCard } from "../shared/pending-rpc.ts";
 import { loadState } from "./paseo-state.ts";
-import { autoArchiveFor, cutoverPath, modeFor, type SavedSettings } from "../shared/install-state.mjs";
+import { autoArchiveFor, cutoverPath, modeFor, type SavedSettings } from "../lib/install-state.mjs";
 import { allFiles, clearPicked, readPending, setPicked, type PendingItem } from "./pending-store.ts";
 
 function toCard(item: PendingItem): PendingCard {

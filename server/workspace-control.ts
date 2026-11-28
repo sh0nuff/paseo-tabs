@@ -8,7 +8,7 @@ import { promisify } from "node:util";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { paseoPluginRoot } from "../shared/install-state.mjs";
+import { paseoPluginRoot } from "../lib/install-state.mjs";
 
 export type Recovery = { kind: string; action?: string; reason?: string; message?: string };
 
