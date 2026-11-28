@@ -23,7 +23,20 @@ function fakeServer(initial?: unknown) {
     }),
     handle: (contract: { name: string }, handler: (input: unknown) => unknown) => handlers.set(contract.name, handler),
     on: () => () => {},
-    addHook: (name: string, handler: unknown) => hooks.set(name, handler),
+    // Callbacks for one hook run in order, each seeing the request the last one returned, as in Paseo.
+    addHook: (name: string, handler: (a: { request: unknown }) => Promise<unknown>) => {
+      const earlier = hooks.get(name) as ((a: { request: unknown }) => Promise<unknown>) | undefined;
+      hooks.set(
+        name,
+        !earlier
+          ? handler
+          : async ({ request }: { request: unknown }) => {
+              const first = await earlier({ request });
+              const second = await handler({ request: first ?? request });
+              return second ?? first;
+            },
+      );
+    },
     before: () => () => {},
     registerProvider: () => {},
     registerUsageSource: () => {},
@@ -157,7 +170,12 @@ test("a fresh install: pending tools for Claude agents at once, no TABS.md writt
   const hook = hooks.get("agent.open.before") as (a: { request: unknown }) => Promise<{ tools: { name: string }[] } | undefined>;
   const claude = await hook({ request: { provider: "claude", tools: [] } });
   assert.deepEqual(claude?.tools.map((x) => x.name), ["pending_add", "pending_update", "pending_done", "pending_list", "pending_find"]);
-  assert.equal(await hook({ request: { provider: "codex", tools: [] } }), undefined);
+  const codex = (await hook({ request: { provider: "codex", agentId: "abcdef1234", cwd: repo, purpose: "interactive", env: {}, tools: [] } })) as
+    | { tools: { name: string }[]; appendSystemPrompt?: string[]; env: Record<string, string> }
+    | undefined;
+  assert.equal(codex?.tools.length, 5);
+  assert.match(codex?.appendSystemPrompt?.[0] ?? "", /pending_add/);
+  assert.equal(codex?.env.PASEO_TABS_RULE_APPENDED, "1");
   assert.deepEqual(await handlers.get("pending.enabled")!({}), { enabled: true, mode: "pending", autoArchive: false });
   assert.equal(existsSync(join(repo, "TABS.md")), false);
   assert.equal(existsSync(join(root, "state", "paseo-tabs")), false);

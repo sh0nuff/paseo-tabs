@@ -91,12 +91,14 @@ test("pending_update with only a letter says nothing to update", async (t) => {
   assert.equal(r.text, "Nothing to update.");
 });
 
-test("the open hook adds the tools to Claude tabs on a fresh install", async (t) => {
+test("the open hook adds the tools to tabs of every provider on a fresh install", async (t) => {
   const dir = pendingDir({ XDG_STATE_HOME: tempDir(t) });
   const hook = pendingToolsHook(dir);
   const open = (provider: string) => hook({ request: { provider, tools: [] as AgentToolDefinition[] } });
-  assert.deepEqual((await open("claude"))?.tools.map((x) => x.name), ["pending_add", "pending_update", "pending_done", "pending_list", "pending_find"]);
-  assert.equal(await open("codex"), undefined);
+  const names = ["pending_add", "pending_update", "pending_done", "pending_list", "pending_find"];
+  assert.deepEqual((await open("claude"))?.tools.map((x) => x.name), names);
+  assert.deepEqual((await open("codex"))?.tools.map((x) => x.name), names);
+  assert.deepEqual((await open("opencode"))?.tools.map((x) => x.name), names);
 });
 
 test("the open hook leaves a 1.x install without tools until the cutover marker exists", async (t) => {

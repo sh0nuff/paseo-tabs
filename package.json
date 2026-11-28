@@ -1,7 +1,7 @@
 {
   "name": "paseo-tabs",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Paseo plugin: a Pending panel of what each Claude tab is waiting on you for, with agent tools to keep it current.",
   "files": [
     "paseo-plugin.json",

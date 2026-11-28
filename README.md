@@ -13,11 +13,11 @@ Each card in the panel shows four lines:
 
 Tap a card to pick it: the tab gets a message starting `Picked from the panel:` and starts on it with you. "Mark done" under a card tells the tab you finished it; the tab checks what it can and closes the item. A search box under the cards finds open items in every workspace and opens the workspace you tap. Each workspace's row in Paseo's sidebar also gets a line with its most urgent tab and the first item waiting on you.
 
-The repository holds two plugins that work together: a Paseo plugin (the panel, the sidebar line, the agent tools and the store) and a Claude Code plugin (the rule each Claude tab gets, and two hooks that keep its list honest).
+The repository holds two plugins. The Paseo plugin is all you need, and works with any agent provider (Claude Code, Codex, OpenCode and the rest): it gives every tab the pending tools and the rule, and shows the panel and the sidebar line. The Claude Code plugin is optional extras for Claude tabs: a reminder of the tab's open items before each message, and an end-of-turn check.
 
 ## Install
 
-You need Paseo 0.17.0 or later for both the daemon and the app, plugins turned on under Settings, Plugins, and tabs running Claude Code. The command-line helper the tabs fall back to needs Node 22.18 or later.
+You need Paseo 0.17.0 or later for both the daemon and the app, and plugins turned on under Settings, Plugins. Tabs can use any agent provider. The command-line helper the tabs fall back to needs Node 22.18 or later.
 
 Install the Paseo plugin from a shell on the machine that runs the Paseo daemon:
 
@@ -25,14 +25,16 @@ Install the Paseo plugin from a shell on the machine that runs the Paseo daemon:
 paseo plugin install github:sh0nuff/paseo-tabs
 ```
 
-Then install the Claude Code plugin, inside Claude Code on the same machine:
+That is enough. Optionally, for the extras on Claude tabs, install the Claude Code plugin, inside Claude Code on the same machine:
 
 ```
 /plugin marketplace add sh0nuff/paseo-tabs
 /plugin install paseo-tabs@paseo-tabs
 ```
 
-New tabs get the rule as they start. A tab that is already open gets it when it resumes or compacts. Open the panel with Ctrl+K (Cmd+K on macOS) and "Open Pending".
+New tabs get the rule as they start, through the system prompt. A tab that is already open gets it when it next opens. The Pending panel opens by itself, once, in each new workspace (turn that off with "Open the Pending panel in new workspaces" in Settings). Open it any time with Ctrl+K (Cmd+K on macOS) and "Open Pending".
+
+A provider that cannot take agent tools still gets the rule and can use the command-line helper the rule names.
 
 ## Remove
 
@@ -49,7 +51,7 @@ The store stays in `~/.local/state/paseo-tabs/` (or `$XDG_STATE_HOME/paseo-tabs/
 
 ## How tabs use it
 
-Every Claude tab gets five tools:
+Every tab, whatever its provider, gets five tools:
 
 | Tool | What it does |
 |---|---|
@@ -59,7 +61,7 @@ Every Claude tab gets five tools:
 | `pending_list` | Lists the tab's open items. |
 | `pending_find` | Finds other tabs to hand work to, live ones and ones whose workspace was archived in the last 30 days, by words from the workspace or tab name or an ID prefix. |
 
-The rule each tab gets ([claude/rule-pending.md](claude/rule-pending.md)) asks it to say every ask in full in the chat and add it to the panel at once, close items the moment there is evidence they are done, and never add an item it can check itself. Two hooks back this up: before each of your messages the tab sees its open items and is asked to reconcile them, and a tab that did real work in a turn without touching its list is stopped once and asked to reconcile before it finishes.
+The rule each tab gets (its text is in [shared/rules.mjs](shared/rules.mjs)) asks it to say every ask in full in the chat and add it to the panel at once, close items the moment there is evidence they are done, and never add an item it can check itself. On Claude tabs with the optional Claude Code plugin, two hooks back this up: before each of your messages the tab sees its open items and is asked to reconcile them, and a tab that did real work in a turn without touching its list is stopped once and asked to reconcile before it finishes.
 
 Messages from the panel:
 
@@ -82,6 +84,7 @@ Find these in Paseo under Settings, Plugins, Tabs.
 |---|---|---|
 | Mode | Pending panel, or the 1.x TABS.md file (legacy) | Pending panel for a new install; TABS.md file for an install upgraded from 1.x, until you switch or migrate |
 | Archive finished workspaces | When every item in a workspace is closed, the tab ends its reply with "Nothing further waiting on you." and the workspace is archived about 10 minutes later. A new item waiting on you brings it back | Off (on for installs migrated from 1.x with the cut-over marker, until you turn it off) |
+| Open the Pending panel in new workspaces | Opens the panel once in each workspace created in the last 10 minutes, on any device. Pending panel mode only | On |
 | Status dots | The coloured dot on each workspace's sidebar line | On |
 | Shorten long names | Shortened display names; the names in Paseo stay as they are | On |
 | Longest name | How many characters a shortened name keeps, 25 to 80 | 40 |

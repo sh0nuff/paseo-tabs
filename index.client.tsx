@@ -4,8 +4,11 @@ import { ComposerDraftActivity } from "./client/use-draft-activity.tsx";
 import { SettingsScreen } from "./client/settings-screen.tsx";
 import { TabsLine } from "./client/tabs-line.tsx";
 import { TabsPanel } from "./client/tabs-panel.tsx";
+import { setPanelOpener } from "./client/auto-open.ts";
 
 export default function contribute(client: PluginClientContext) {
+  // The workspace row badge below has no client of its own; it opens the panel through this one.
+  setPanelOpener((workspaceId) => client.openPanel("pending", { workspaceId }));
   client.addWorkspacePanel({
     id: "tabs",
     title: "Tabs",
@@ -57,5 +60,7 @@ export default function contribute(client: PluginClientContext) {
       Component: TabsLine,
     });
   }
-  return () => {};
+  return () => {
+    setPanelOpener(null);
+  };
 }

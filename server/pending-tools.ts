@@ -129,8 +129,10 @@ export function pendingTools(dir: string, options: ToolOptions = {}): AgentToolD
 type OpenRequest = { provider: string; tools: AgentToolDefinition[] };
 
 /**
- * The `agent.open.before` hook: a Claude tab gets the pending tools only in mode "pending",
- * checked at every open so switching the mode needs no restart.
+ * The `agent.open.before` hook: every tab gets the pending tools in mode "pending", whatever its
+ * provider, checked at every open so switching the mode needs no restart. Paseo delivers them by
+ * MCP or native registration as the provider supports; one that takes neither simply goes
+ * without (unlike plugin MCP servers, attached tools never fail an open).
  */
 export function pendingToolsHook(
   dir: string,
@@ -138,7 +140,7 @@ export function pendingToolsHook(
   enabled: () => boolean = () => modeFor(dir, {}) === "pending",
 ) {
   return async <R extends OpenRequest>({ request }: { request: R }): Promise<R | undefined> => {
-    if (request.provider !== "claude" || !enabled()) return undefined;
+    if (!enabled()) return undefined;
     return { ...request, tools: [...request.tools, ...tools] };
   };
 }

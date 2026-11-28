@@ -1,9 +1,11 @@
-import { type PluginWorkspaceRowBadgeItemProps, useAgents, useRpc, useSettings } from "@getpaseo/plugin/client";
+import { type PluginWorkspaceRowBadgeItemProps, useAgents, useRpc, useSettings, useWorkspace } from "@getpaseo/plugin/client";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Text, View } from "react-native";
 import { displaySettings } from "../shared/settings.ts";
 import { tabsLines } from "../shared/tabs-rpc.ts";
+import { panelOpenClaim } from "../shared/auto-open-rpc.ts";
+import { maybeOpenPanel } from "./auto-open.ts";
 import { DraftActivity } from "./use-draft-activity.tsx";
 import { lineView } from "./line-view.ts";
 import { statusColours } from "./palettes.ts";
@@ -22,6 +24,15 @@ export function TabsLine({ theme, workspaceId }: PluginWorkspaceRowBadgeItemProp
     queryFn: () => fetchLines({}),
     refetchInterval: 5000,
   });
+
+  // This row is always mounted, so it is where a new workspace is noticed: the panel opens in it once.
+  const claim = useRpc(panelOpenClaim);
+  const createdAt = useWorkspace(workspaceId, (w) => w.createdAt);
+  const autoOpen = settings.status === "ready" ? settings.values.autoOpenPanel : undefined;
+  const settingsReady = settings.status === "ready";
+  useEffect(() => {
+    if (settingsReady) void maybeOpenPanel({ workspaceId, createdAt, autoOpenPanel: autoOpen, now: new Date(), claim });
+  }, [workspaceId, createdAt, autoOpen, settingsReady]);
 
   const view = lineView(query.data?.lines, workspaceId, dots, colours);
   // The row mounts on phones too, where the composer item only mounts while its sheet is open.

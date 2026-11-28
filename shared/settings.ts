@@ -24,6 +24,7 @@ export const displaySettings = defineSettings({
     pendingStore: z.boolean().default(false),
     mode: z.enum(["pending", "tabs-md"]).optional(),
     autoArchive: z.boolean().optional(),
+    autoOpenPanel: z.boolean().default(true),
   }),
 });
 

@@ -100,6 +100,13 @@ export function SettingsScreen({ theme, layout }: PluginSurfaceProps) {
           onValueChange={(next) => void save({ autoArchive: next })}
         />
         <SettingsSwitch
+          label="Open the Pending panel in new workspaces"
+          hint="When a workspace is created, the Pending panel opens in it once. Pending panel mode only."
+          value={values.autoOpenPanel}
+          disabled={settings.saving || legacy}
+          onValueChange={(autoOpenPanel) => void save({ autoOpenPanel })}
+        />
+        <SettingsSwitch
           label="Status dots"
           hint="A dot before each open tab: red when something has waited on you too long, orange when something waits on you, blue when only Claude has next steps, a tick when nothing is open."
           value={values.statusDots}

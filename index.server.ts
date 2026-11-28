@@ -8,6 +8,7 @@ import { paseoHome } from "./server/paseo-state.ts";
 import { pendingEnabledHandler, storeMode, pendingListHandler, pendingPickHandler, pendingSearchHandler, pendingUnpickHandler } from "./server/pending-rpc.ts";
 import { pendingDir } from "./server/pending-store.ts";
 import { pendingTools, pendingToolsHook } from "./server/pending-tools.ts";
+import { ruleHook } from "./server/rule-hook.ts";
 import { DEFAULT_DISPLAY, type DisplayOptions } from "./server/tabs-file.ts";
 import { cachedFor, workspaceLines } from "./server/tabs-lines.ts";
 import { listTabs } from "./server/tabs-list.ts";
@@ -15,7 +16,11 @@ import { storeLines, storeTabRows } from "./server/pending-lines.ts";
 import { type Watcher, startWatcher } from "./server/watcher.ts";
 import { displaySettings } from "./shared/settings.ts";
 import { autoArchiveFor, modeFor, savedSettings } from "./shared/install-state.mjs";
+import { buildRule } from "./shared/rules.mjs";
 import { pendingEnabled, pendingList, pendingPick, pendingSearch, pendingUnpick } from "./shared/pending-rpc.ts";
+import { panelOpenClaim } from "./shared/auto-open-rpc.ts";
+import { panelOpenClaimHandler, openedPath } from "./server/auto-open.ts";
+import { tabsStateDir } from "./shared/install-state.mjs";
 import { pendingActivity } from "./shared/activity-rpc.ts";
 import { tabsLines, tabsList } from "./shared/tabs-rpc.ts";
 
@@ -70,6 +75,11 @@ export default function contribute(server: PluginServerContext) {
     "agent.open.before",
     pendingToolsHook(store, pendingTools(store, { autoArchive: autoArchiveOn }), () => modeFor(store, saved()) === "pending"),
   );
+  // The rule reaches every provider through the system prompt, with or without the Claude Code plugin.
+  server.addHook(
+    "agent.open.before",
+    ruleHook((agentId, cwd) => buildRule({ agentId, cwd, env: process.env, saved: saved() })),
+  );
 
   server.handle(tabsList, ({ workspaceId }) => ({
     tabs: pendingOn()
@@ -85,6 +95,7 @@ export default function contribute(server: PluginServerContext) {
   server.handle(pendingPick, ({ workspaceId, agentId, letter, done }) => pendingPickHandler(store, workspaceId, agentId, letter, new Date(), done === true));
   server.handle(pendingUnpick, ({ workspaceId, agentId, letter }) => pendingUnpickHandler(store, workspaceId, agentId, letter));
   server.handle(pendingEnabled, () => pendingEnabledHandler(store, saved()));
+  server.handle(panelOpenClaim, ({ workspaceId }) => panelOpenClaimHandler(openedPath(tabsStateDir(process.env)), workspaceId, pendingOn(), new Date()));
   server.handle(pendingSearch, ({ query }) => pendingSearchHandler(store, home, query));
   server.handle(pendingActivity, ({ agentId, draftLength }) => pendingActivityHandler(store, agentId, draftLength, new Date()));
 

@@ -150,22 +150,6 @@ test("a 1.x install without the marker prints the TABS.md rule", (t) => {
   assert.doesNotMatch(rule, /pending_add/);
 });
 
-test("with the marker but no pending rule file, still exits 0 and prints nothing", (t) => {
-  const root = tempDir(t);
-  const repo = gitInit(join(root, "repo"));
-  const state = join(root, "state");
-  mkdirSync(join(state, "paseo-tabs", "pending"), { recursive: true });
-  writeFileSync(join(state, "paseo-tabs", "pending", "cutover"), "");
-  mkdirSync(join(root, "plugin"));
-  copyFileSync(HOOK, join(root, "plugin", "session-start.mjs"));
-  copyFileSync(join(dirname(HOOK), "rule.md"), join(root, "plugin", "rule.md"));
-
-  assert.deepEqual(
-    run({ PASEO_AGENT_ID: "abcdef1234", PASEO_AGENT_CWD: repo, XDG_STATE_HOME: state }, "", join(root, "plugin", "session-start.mjs")),
-    { stdout: "", status: 0 },
-  );
-});
-
 // 2.0: mode, auto-archive and the plugin folder.
 
 test("a fresh install gets the pending rule, with no archiving and the hook's own plugin folder", (t) => {
@@ -256,4 +240,12 @@ test("rule-extra.md in the state folder is appended to the rule", (t) => {
   const rule = context(run({ PASEO_AGENT_ID: "abcdef1234", PASEO_AGENT_CWD: repo, XDG_STATE_HOME: state }).stdout);
   assert.match(rule, /pending_add/);
   assert.match(rule, /\n\nAlso mirror waiting items to the team board\.\n$/);
+});
+
+// 2.1: the Paseo plugin appends the rule itself and sets PASEO_TABS_RULE_APPENDED.
+
+test("prints nothing when the Paseo plugin already appended the rule", (t) => {
+  const repo = gitInit(join(tempDir(t), "repo"));
+  assert.deepEqual(run({ PASEO_AGENT_ID: "abcdef1234", PASEO_AGENT_CWD: repo, XDG_STATE_HOME: tempDir(t), PASEO_TABS_RULE_APPENDED: "1" }), { stdout: "", status: 0 });
+  assert.match(context(run({ PASEO_AGENT_ID: "abcdef1234", PASEO_AGENT_CWD: repo, XDG_STATE_HOME: tempDir(t) }).stdout), /pending_add/);
 });
