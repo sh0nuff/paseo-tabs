@@ -15,7 +15,7 @@
 // Prints the item (or the list) as JSON. On error prints the message, exit 1.
 
 import { parseArgs } from "node:util";
-import { autoArchiveFor, savedSettings } from "../lib/install-state.mjs";
+import { autoArchiveFor, savedSettings } from "../server/install-state.mjs";
 import { registryPath } from "../server/archived-tabs.ts";
 import { scheduleAutoArchive } from "../server/schedule-archive.ts";
 import { autoArchive, findTabs, isArchived } from "../server/auto-archive.ts";

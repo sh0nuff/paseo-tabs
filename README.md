@@ -61,7 +61,7 @@ Every tab, whatever its provider, gets five tools:
 | `pending_list` | Lists the tab's open items. |
 | `pending_find` | Finds other tabs to hand work to, live ones and ones whose workspace was archived in the last 30 days, by words from the workspace or tab name or an ID prefix. |
 
-The rule each tab gets (its text is in [lib/rules.mjs](lib/rules.mjs)) asks it to say every ask in full in the chat and add it to the panel at once, close items the moment there is evidence they are done, and never add an item it can check itself. On Claude tabs with the optional Claude Code plugin, two hooks back this up: before each of your messages the tab sees its open items and is asked to reconcile them, and a tab that did real work in a turn without touching its list is stopped once and asked to reconcile before it finishes.
+The rule each tab gets (its text is in [server/rules.mjs](server/rules.mjs)) asks it to say every ask in full in the chat and add it to the panel at once, close items the moment there is evidence they are done, and never add an item it can check itself. On Claude tabs with the optional Claude Code plugin, two hooks back this up: before each of your messages the tab sees its open items and is asked to reconcile them, and a tab that did real work in a turn without touching its list is stopped once and asked to reconcile before it finishes.
 
 Messages from the panel:
 

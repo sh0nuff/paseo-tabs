@@ -3,7 +3,7 @@
 // time from its SessionStart hook, so the open also sets PASEO_TABS_RULE_APPENDED=1 in the
 // tab's environment and that hook then stays silent.
 
-import { RULE_APPENDED_ENV } from "../lib/rules.mjs";
+import { RULE_APPENDED_ENV } from "./rules.mjs";
 
 type OpenRequest = {
   agentId: string;

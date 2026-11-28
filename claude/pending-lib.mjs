@@ -3,7 +3,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { autoArchiveFor, modeFor, paseoHomeDir, pendingStoreDir, stateRoot as stateRootOf } from "../lib/install-state.mjs";
+import { autoArchiveFor, modeFor, paseoHomeDir, pendingStoreDir, stateRoot as stateRootOf } from "../server/install-state.mjs";
 
 function pendingDir() {
   return pendingStoreDir(process.env);

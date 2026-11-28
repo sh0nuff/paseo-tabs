@@ -55,7 +55,7 @@ export interface DisplayOptions {
   workspaceOrder: "newest" | "latestMessage";
   /** Finished items leave a day after they were ticked. Only false turns this off. */
   removeFinished: boolean;
-  /** The 1.x-era switch for the pending store; `mode` replaces it. See lib/install-state.mjs. */
+  /** The 1.x-era switch for the pending store; `mode` replaces it. See server/install-state.mjs. */
   pendingStore?: boolean;
   /** "pending" (the Pending panel) or "tabs-md" (the 1.x TABS.md file); unset means worked out from disk. */
   mode?: "pending" | "tabs-md";

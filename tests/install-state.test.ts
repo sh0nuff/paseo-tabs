@@ -12,7 +12,7 @@ import {
   resolveAutoArchive,
   resolveMode,
   savedSettings,
-} from "../lib/install-state.mjs";
+} from "../server/install-state.mjs";
 import { controlCli, paseoCliRoot } from "../server/workspace-control.ts";
 import { tempDir } from "./helpers.ts";
 

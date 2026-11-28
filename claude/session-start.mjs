@@ -3,7 +3,7 @@
 // Inside a Paseo tab whose folder is the top level of a git repo, it gives the tab the
 // Pending panel rule (mode "pending") or the 1.x TABS.md rule (mode "tabs-md"), with the
 // tab's IDs, the plugin's folder and the auto-archive wording filled in, plus the user's
-// `rule-extra.md` (see lib/rules.mjs). The Paseo plugin (2.1 and later) already appends the
+// `rule-extra.md` (see server/rules.mjs). The Paseo plugin (2.1 and later) already appends the
 // same rule to every tab's system prompt and sets PASEO_TABS_RULE_APPENDED=1 in its
 // environment; then this hook prints nothing, so the rule is never given twice. Anywhere else
 // it prints nothing. It never fails the session.
@@ -26,7 +26,7 @@ async function main() {
   const cwd = process.env.PASEO_AGENT_CWD || hookInput().cwd;
   const here = dirname(fileURLToPath(import.meta.url));
   // Loaded here, not at the top, so a broken or missing install never stops the hook from exiting 0.
-  const { buildRule } = await import(pathToFileURL(join(here, "..", "lib", "rules.mjs")).href);
+  const { buildRule } = await import(pathToFileURL(join(here, "..", "server", "rules.mjs")).href);
   const rule = buildRule({ agentId, cwd, env: process.env, fallbackRoot: resolve(here, "..") });
   if (!rule) return;
   process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: rule } }));

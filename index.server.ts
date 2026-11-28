@@ -15,12 +15,12 @@ import { listTabs } from "./server/tabs-list.ts";
 import { storeLines, storeTabRows } from "./server/pending-lines.ts";
 import { type Watcher, startWatcher } from "./server/watcher.ts";
 import { displaySettings } from "./shared/settings.ts";
-import { autoArchiveFor, modeFor, savedSettings } from "./lib/install-state.mjs";
-import { buildRule } from "./lib/rules.mjs";
+import { autoArchiveFor, modeFor, savedSettings } from "./server/install-state.mjs";
+import { buildRule } from "./server/rules.mjs";
 import { pendingEnabled, pendingList, pendingPick, pendingSearch, pendingUnpick } from "./shared/pending-rpc.ts";
 import { panelOpenClaim } from "./shared/auto-open-rpc.ts";
 import { panelOpenClaimHandler, openedPath } from "./server/auto-open.ts";
-import { tabsStateDir } from "./lib/install-state.mjs";
+import { tabsStateDir } from "./server/install-state.mjs";
 import { pendingActivity } from "./shared/activity-rpc.ts";
 import { tabsLines, tabsList } from "./shared/tabs-rpc.ts";
 
